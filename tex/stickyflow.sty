@@ -3,6 +3,7 @@
 \RequirePackage{iftex}
 \RequireLuaTeX
 \RequirePackage{xcolor}
+\newbox\stickyflowbox
 \directlua{stickyflow = require('stickyflow')}
 \AddToHook{enddocument/afterlastpage}{\directlua{stickyflow.embed()}}
 % \sflinput[width]{file.sfl}: the figure in the file, as wide as the width, which is the line by default.

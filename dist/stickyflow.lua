@@ -410,6 +410,9 @@ local function rgbText(r, g, b)
   return string.format('%s,%s,%s', f(r), f(g), f(b))
 end
 
+-- The graphics states with transparency, by their fill and stroke alpha, shared by all figures of the document.
+local graphicsStates = { list = {} }
+
 function stickyflow.draw(svg, width, mark)
   local root = parseSvg(svg)
   local vb = numbers(root.attrs.viewBox or ('0 0 ' .. (root.attrs.width or '100') .. ' ' .. (root.attrs.height or '100')))
@@ -450,8 +453,38 @@ function stickyflow.draw(svg, width, mark)
   -- The figure in PDF: points from the lower left, so the SVG is turned upside down and moved to its view box.
   local frame = string.format('%s 0 0 %s 0 %s cm 1 0 0 1 %s %s cm', f(scale), f(-scale), f(height), f(-vx), f(-vy))
 
+  -- Shapes are gathered into runs between texts. Each run becomes a form of its own with the graphics states it uses as its own resources, so
+  -- transparency works without touching the resources of the page, which other packages such as TikZ fill as well.
+  local run, runStates = {}, {}
+
   local function literal(body)
-    out[#out + 1] = '\\pdfextension literal{q ' .. frame .. ' ' .. body .. ' Q}'
+    run[#run + 1] = 'q ' .. body .. ' Q'
+  end
+
+  -- The name of a graphics state with this transparency for fills and strokes, made the first time it is needed.
+  local function alphaState(fill, stroke)
+    local key = string.format('%.3f/%.3f', fill, stroke)
+    local state = graphicsStates[key]
+    if not state then
+      state = { name = 'sfa' .. (#graphicsStates.list + 1) }
+      state.object = pdf.immediateobj(string.format('<< /Type /ExtGState /ca %s /CA %s >>', f(fill), f(stroke)))
+      graphicsStates[key] = state
+      graphicsStates.list[#graphicsStates.list + 1] = state
+    end
+    runStates[state.name] = state.object
+    return '/' .. state.name .. ' gs'
+  end
+
+  local function flushRun()
+    if #run == 0 then return end
+    local resources = {}
+    for name, object in pairs(runStates) do resources[#resources + 1] = string.format('/%s %d 0 R', name, object) end
+    local content = 'q ' .. frame .. ' ' .. table.concat(run, ' ') .. ' Q'
+    out[#out + 1] = string.format(
+      '\\setbox\\stickyflowbox\\hbox to %sbp{\\vbox to %sbp{\\vss\\hbox{\\pdfextension literal{%s}}}\\hss}\\saveboxresource%s\\stickyflowbox\\rlap{\\useboxresource\\lastsavedboxresourceindex}',
+      f(vw * scale), f(height), content, #resources > 0 and (' resources{/ExtGState << ' .. table.concat(resources, ' ') .. ' >>}') or ''
+    )
+    run, runStates = {}, {}
   end
 
   local function drawMarker(id, at, reverse)
@@ -466,8 +499,8 @@ function stickyflow.draw(svg, width, mark)
         local fr, fg, fb, fa = color(shape.attrs.fill, gradients)
         local body = string.format('%s %s %s %s %s %s cm %s', f(c), f(s), f(-s), f(c), f(at[1]), f(at[2]), ops)
         if fr then
-          local r, g, b = onWhite(fr, fg, fb, fa, 1)
-          literal(string.format('%s %s %s rg %s f', f(r), f(g), f(b), body))
+          local alpha = fa < 0.999 and (alphaState(fa, 1) .. ' ') or ''
+          literal(string.format('%s%s %s %s rg %s f', alpha, f(fr), f(fg), f(fb), body))
         end
       end
     end
@@ -491,17 +524,18 @@ function stickyflow.draw(svg, width, mark)
     local sr, sg, sb, sa = color(a.stroke, gradients)
     local strokeWidth = num(a, 'stroke-width', 1)
     local paint = nil
+    local fillAlpha, strokeAlpha = 1, 1
     if fr then
-      local r, g, b, alpha = onWhite(fr, fg, fb, fa * num(a, 'fill-opacity', 1), opacity)
-      if alpha > 0.002 then
-        parts[#parts + 1] = string.format('%s %s %s rg', f(r), f(g), f(b))
+      fillAlpha = fa * num(a, 'fill-opacity', 1) * opacity
+      if fillAlpha > 0.002 then
+        parts[#parts + 1] = string.format('%s %s %s rg', f(fr), f(fg), f(fb))
         paint = 'f'
       end
     end
     if sr and strokeWidth > 0 then
-      local r, g, b, alpha = onWhite(sr, sg, sb, sa * num(a, 'stroke-opacity', 1), opacity)
-      if alpha > 0.002 then
-        parts[#parts + 1] = string.format('%s %s %s RG %s w', f(r), f(g), f(b), f(strokeWidth))
+      strokeAlpha = sa * num(a, 'stroke-opacity', 1) * opacity
+      if strokeAlpha > 0.002 then
+        parts[#parts + 1] = string.format('%s %s %s RG %s w', f(sr), f(sg), f(sb), f(strokeWidth))
         local cap = ({ butt = 0, round = 1, square = 2 })[a['stroke-linecap'] or 'butt']
         local join = ({ miter = 0, round = 1, bevel = 2 })[a['stroke-linejoin'] or 'miter']
         parts[#parts + 1] = (cap or 0) .. ' J ' .. (join or 0) .. ' j'
@@ -514,6 +548,9 @@ function stickyflow.draw(svg, width, mark)
       end
     end
     if paint then
+      if fillAlpha < 0.999 or strokeAlpha < 0.999 then
+        table.insert(parts, 1, alphaState(math.min(1, fillAlpha), math.min(1, strokeAlpha)))
+      end
       parts[#parts + 1] = ops .. ' ' .. paint
       literal(table.concat(parts, ' '))
     end
@@ -572,6 +609,7 @@ function stickyflow.draw(svg, width, mark)
       if name == 'g' then
         walk(child, inherited * num(child.attrs, 'opacity', 1))
       elseif name == 'text' then
+        flushRun()
         text(child, inherited)
       elseif name == 'path' or name == 'rect' or name == 'ellipse' or name == 'circle' then
         shape(child, inherited)
@@ -579,6 +617,7 @@ function stickyflow.draw(svg, width, mark)
     end
   end
   walk(root, 1)
+  flushRun()
 
   local box = string.format('\\hbox to %sbp{\\vbox to %sbp{\\vss\\hbox to %sbp{%s\\sffamily%s\\hss}}}', f(vw * scale), f(height), f(vw * scale), mark or '', table.concat(out))
   return box, vw * scale, height
