@@ -1,0 +1,6 @@
+node_modules/
+build/
+examples/*.aux
+examples/*.log
+examples/*.pdf
+examples/*.out

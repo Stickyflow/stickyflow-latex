@@ -1,0 +1,496 @@
+// A long section that is computed from the Parameters below, in the file itself, with the controls of the Parameters in the drawing.
+sfl 1.11
+
+Parameters building {
+  floors: 6 // 2..9 step 1, Floors
+  bays: 4 // 3..6 step 1, Bays
+  bay: 6 // 4..8 step 0.5, Bay width, m
+  floorHeight: 3.6 // 2.8..5 step 0.1, Floor height, m
+  slide: 1 // 0..2 step 0.25, Slab step, m
+  scale: 20
+  left: 170
+  ground: 760
+  bayPx: bay * scale
+  levelPx: floorHeight * scale
+  widthPx: bays * bayPx
+  roofY: ground - floors * levelPx
+  coreBay: floor((bays - 1) / 2)
+  coreX: left + coreBay * bayPx
+}
+
+Style Cut {
+  shape: rectangle
+  fill: "#0b0b0b"
+  stroke: none
+}
+
+Style Soft {
+  stroke: "#9a9a9a"
+  strokeWidth: 0.4
+  fill: none
+}
+
+Style Line {
+  stroke: "#0b0b0b"
+  strokeWidth: 0.9
+  fill: none
+}
+
+Style Label {
+  fontSize: 10
+  textColor: "#0b0b0b"
+  textAlign: left
+}
+
+Template tree {
+  crown: 24
+  Path trunk : Line {
+    points: [[x, y], [x, y - crown * 2]]
+  }
+  Shape leaves {
+    layout {
+      position: x - crown, y - crown * 3.4
+      size: crown * 2, crown * 2
+    }
+    style {
+      shape: circle
+      fill: none
+      stroke: "#0b0b0b"
+      strokeWidth: 0.6
+    }
+  }
+}
+
+Model section_study {
+  Screen sheet {
+    clip: true
+    style {
+      fill: "#fbfaf6"
+    }
+    layout {
+      position: 0, 0
+      size: 1000, 1080
+    }
+
+    Text title {
+      text: "SECTION STUDY"
+      layout {
+        position: 60, 40
+        size: 400, 44
+      }
+      style {
+        fontSize: 28
+        fontWeight: 700
+        textColor: "#0b0b0b"
+        textAlign: left
+        letterSpacing: 3
+      }
+    }
+    Text subtitle {
+      text: floors + " floors on " + bays + " bays of " + bay + " m, all computed in this file"
+      layout {
+        position: 60, 84
+        size: 600, 20
+      }
+      style {
+        fontSize: 12
+        textColor: "#555555"
+        textAlign: left
+      }
+    }
+
+    Repeat sun {
+      columns: 3
+      rows: floors
+      Path ray : Soft {
+        points: [[60, 140], [left + slide * scale * round(3 * sin((row + 1) * 0.8)) + col * 26, ground - (row + 1) * levelPx - 2]]
+      }
+    }
+    Shape sunDisc {
+      layout {
+        position: 52, 132
+        size: 16, 16
+      }
+      style {
+        shape: circle
+        fill: "#0b0b0b"
+        stroke: none
+      }
+    }
+
+    Repeat earth {
+      count: 58
+      Path hatch : Soft {
+        points: [[50 + col * 14, ground + 110], [50 + col * 14 + 110, ground]]
+      }
+    }
+    Shape basement {
+      layout {
+        position: left - 10, ground
+        size: widthPx + 20, 106
+      }
+      style {
+        shape: rectangle
+        fill: "#fbfaf6"
+        stroke: none
+      }
+    }
+    Shape foundation : Cut {
+      layout {
+        position: left - 10, ground + 92
+        size: widthPx + 20, 14
+      }
+    }
+    Shape basementLeft : Cut {
+      layout {
+        position: left - 10, ground
+        size: 10, 100
+      }
+    }
+    Shape basementRight : Cut {
+      layout {
+        position: left + widthPx, ground
+        size: 10, 100
+      }
+    }
+    Path groundLine {
+      points: [[50, ground], [900, ground]]
+      style {
+        stroke: "#0b0b0b"
+        strokeWidth: 2.2
+        fill: none
+      }
+    }
+
+    Repeat cars {
+      count: bays
+      where: col != coreBay
+      Shape car {
+        layout {
+          position: left + col * bayPx + bayPx / 2 - 37, ground + 58
+          size: 74, 34
+        }
+        style {
+          shape: rounded_rectangle
+          cornerRadius: 12
+          fill: none
+          stroke: "#0b0b0b"
+          strokeWidth: 0.7
+        }
+      }
+    }
+
+    Repeat slabs {
+      count: floors + 1
+      reachLeft: slide * scale * round(3 * sin(col * 0.8))
+      reachRight: slide * scale * round(2 * sin(col * 0.8))
+      Shape slab : Cut {
+        layout {
+          position: left + reachLeft, ground - col * levelPx - 5
+          size: widthPx + reachRight - reachLeft, 10
+        }
+      }
+    }
+
+    Repeat columnsOfBuilding {
+      columns: bays + 1
+      rows: floors
+      px: left + col * bayPx
+      below: slide * scale * round(3 * sin(row * 0.8))
+      above: slide * scale * round(3 * sin((row + 1) * 0.8))
+      belowRight: slide * scale * round(2 * sin(row * 0.8))
+      aboveRight: slide * scale * round(2 * sin((row + 1) * 0.8))
+      edge: left + max(below, above) + 8
+      rightEdge: left + widthPx + min(belowRight, aboveRight) - 8
+      where: px > edge && px < rightEdge
+      Shape column : Cut {
+        layout {
+          position: px - 3, ground - (row + 1) * levelPx + 5
+          size: 6, levelPx - 10
+        }
+      }
+    }
+
+    Repeat louvres {
+      columns: 7
+      rows: floors
+      above: slide * scale * round(3 * sin((row + 1) * 0.8))
+      below: slide * scale * round(3 * sin(row * 0.8))
+      Path louvre : Line {
+        points: [[left + max(above, below) + 4, ground - row * levelPx - 12 - col * 8], [left + max(above, below) + 16, ground - row * levelPx - 12 - col * 8]]
+      }
+    }
+
+    Shape coreLeft : Cut {
+      layout {
+        position: coreX - 5, roofY
+        size: 5, ground + 92 - roofY
+      }
+    }
+    Shape coreRight : Cut {
+      layout {
+        position: coreX + bayPx, roofY
+        size: 5, ground + 92 - roofY
+      }
+    }
+    Repeat stairs {
+      count: floors
+      Path flight : Line {
+        points: [[coreX + 4, ground - col * levelPx - 5], [coreX + bayPx * 0.55, ground - (col + 0.5) * levelPx], [coreX + 4, ground - (col + 1) * levelPx + 5]]
+      }
+    }
+    Shape lift {
+      layout {
+        position: coreX + bayPx * 0.68, ground - levelPx + 10
+        size: 24, 44
+      }
+      style {
+        shape: rectangle
+        fill: none
+        stroke: "#0b0b0b"
+        strokeWidth: 0.8
+      }
+    }
+
+    Repeat rooms {
+      columns: bays
+      rows: floors
+      where: col != coreBay && floor((col + row) / 2) * 2 == col + row
+      Path desk : Line {
+        points: [[left + (col + 0.5) * bayPx - 18, ground - row * levelPx - 14], [left + (col + 0.5) * bayPx + 18, ground - row * levelPx - 14]]
+      }
+    }
+    Repeat people {
+      columns: bays
+      rows: floors
+      where: col != coreBay && floor((col + row) / 2) * 2 != col + row
+      Shape body {
+        layout {
+          position: left + (col + 0.5) * bayPx - 3, ground - row * levelPx - 17
+          size: 6, 12
+        }
+        style {
+          shape: rounded_rectangle
+          cornerRadius: 2
+          fill: "#0b0b0b"
+          stroke: none
+        }
+      }
+      Shape head {
+        layout {
+          position: left + (col + 0.5) * bayPx - 3, ground - row * levelPx - 24
+          size: 6, 6
+        }
+        style {
+          shape: circle
+          fill: "#0b0b0b"
+          stroke: none
+        }
+      }
+    }
+
+    Use oak : tree {
+      at: 110, ground
+      crown: 26
+    }
+    Use birch : tree {
+      at: 880, ground
+      crown: 18
+    }
+
+    Repeat levels {
+      count: floors + 1
+      Path mark {
+        points: [[936, ground - col * levelPx], [928, ground - col * levelPx - 7], [944, ground - col * levelPx - 7]]
+        closed: true
+        style {
+          stroke: "#0b0b0b"
+          fill: "#0b0b0b"
+        }
+      }
+      Text height : Label {
+        text: "+" + round(col * floorHeight * 100) / 100
+        layout {
+          position: 948, ground - col * levelPx - 16
+          size: 50, 18
+        }
+      }
+    }
+    Repeat floorMeasures {
+      count: floors
+      Dimension floorMeasure {
+        text: "" + floorHeight
+        start: 910, ground - col * levelPx
+        end: 910, ground - (col + 1) * levelPx
+        offset: 0
+        style {
+          stroke: "#555555"
+          strokeWidth: 0.6
+          fontSize: 9
+        }
+      }
+    }
+    Dimension width {
+      text: "" + bays * bay
+      start: left, ground + 120
+      end: left + widthPx, ground + 120
+      offset: -8
+      style {
+        stroke: "#555555"
+        strokeWidth: 0.6
+        fontSize: 9
+      }
+    }
+    Shape controlBand {
+      layout {
+        position: 0, 960
+        size: 1000, 120
+      }
+      style {
+        shape: rectangle
+        fill: "#f1efe8"
+        stroke: "#e2dfd4"
+      }
+    }
+    Text floorsLabel {
+      text: <- "Floors  " + building.floors + ""
+      layout {
+        position: 60, 986
+        size: 170, 20
+      }
+      style {
+        fontSize: 12
+        fontWeight: 600
+        textColor: "#0b0b0b"
+        textAlign: left
+      }
+    }
+    Component floorsControl {
+      type: slider
+      value: <-> building.floors
+      min: 2
+      max: 9
+      layout {
+        position: 60, 1014
+        size: 160, 32
+      }
+      style {
+        accent: "#0b0b0b"
+        track: "#d6d2c6"
+        step: 1
+      }
+    }
+    Text baysLabel {
+      text: <- "Bays  " + building.bays + ""
+      layout {
+        position: 244, 986
+        size: 170, 20
+      }
+      style {
+        fontSize: 12
+        fontWeight: 600
+        textColor: "#0b0b0b"
+        textAlign: left
+      }
+    }
+    Component baysControl {
+      type: slider
+      value: <-> building.bays
+      min: 3
+      max: 6
+      layout {
+        position: 244, 1014
+        size: 160, 32
+      }
+      style {
+        accent: "#0b0b0b"
+        track: "#d6d2c6"
+        step: 1
+      }
+    }
+    Text bayLabel {
+      text: <- "Bay width  " + building.bay + " m"
+      layout {
+        position: 428, 986
+        size: 170, 20
+      }
+      style {
+        fontSize: 12
+        fontWeight: 600
+        textColor: "#0b0b0b"
+        textAlign: left
+      }
+    }
+    Component bayControl {
+      type: slider
+      value: <-> building.bay
+      min: 4
+      max: 8
+      layout {
+        position: 428, 1014
+        size: 160, 32
+      }
+      style {
+        accent: "#0b0b0b"
+        track: "#d6d2c6"
+        step: 0.5
+      }
+    }
+    Text floorHeightLabel {
+      text: <- "Floor height  " + building.floorHeight + " m"
+      layout {
+        position: 612, 986
+        size: 170, 20
+      }
+      style {
+        fontSize: 12
+        fontWeight: 600
+        textColor: "#0b0b0b"
+        textAlign: left
+      }
+    }
+    Component floorHeightControl {
+      type: slider
+      value: <-> building.floorHeight
+      min: 2.8
+      max: 5
+      layout {
+        position: 612, 1014
+        size: 160, 32
+      }
+      style {
+        accent: "#0b0b0b"
+        track: "#d6d2c6"
+        step: 0.1
+      }
+    }
+    Text slideLabel {
+      text: <- "Slab step  " + building.slide + " m"
+      layout {
+        position: 796, 986
+        size: 170, 20
+      }
+      style {
+        fontSize: 12
+        fontWeight: 600
+        textColor: "#0b0b0b"
+        textAlign: left
+      }
+    }
+    Component slideControl {
+      type: slider
+      value: <-> building.slide
+      min: 0
+      max: 2
+      layout {
+        position: 796, 1014
+        size: 160, 32
+      }
+      style {
+        accent: "#0b0b0b"
+        track: "#d6d2c6"
+        step: 0.25
+      }
+    }
+  }
+}
