@@ -730,10 +730,21 @@ if luatexbase and luatexbase.add_to_callback then
   luatexbase.add_to_callback('process_input_buffer', filter, 'stickyflow.environment')
 end
 
+-- The rows of the data sources can follow the SFL in the environment, after a line of three dashes, as JSON.
 function stickyflow.block(index, width, dataName)
   local block = blocks[index]
-  local data = dataName and dataName ~= '' and readFile(dataName) or nil
-  stickyflow.figure(table.concat(block.lines, '\n'), width, data)
+  local sfl, rows = {}, nil
+  for _, line in ipairs(block.lines) do
+    if rows then
+      rows[#rows + 1] = line
+    elseif line:match('^%s*%-%-%-%s*$') then
+      rows = {}
+    else
+      sfl[#sfl + 1] = line
+    end
+  end
+  local data = rows and table.concat(rows, '\n') or (dataName and dataName ~= '' and readFile(dataName)) or nil
+  stickyflow.figure(table.concat(sfl, '\n'), width, data)
 end
 
 function stickyflow.figureFile(name, width, dataName)

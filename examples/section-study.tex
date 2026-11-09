@@ -3,11 +3,113 @@
 \usepackage{stickyflow}
 \begin{document}
 \section*{Figures drawn by stickyflow in LuaLaTeX}
-The first two figures are SFL files next to this document, the third is SFL written in it. All are rendered while this document compiles.
+The chart is SFL written in this document, with its data below a line of three dashes; the section is an SFL file next to it. All are rendered while this document compiles.
 The PDF carries their source, so the stickyflow PDF extension makes them live: move the sliders in the figures.
 
 \begin{center}
-\sflinput[0.8\linewidth][revenue.json]{revenue.sfl}
+\begin{sfl}[0.8\linewidth]
+sfl 1.10
+
+// Revenue by quarter, and the plan for the next year grown by a slider.
+DataSource sales {
+  mode: table
+  fields {
+    quarter: string
+    amount: number
+  }
+}
+
+DataSource plan {
+  mode: record
+  fields {
+    growth: number
+  }
+}
+
+Model report {
+  Chart revenue {
+    type: bar
+    stacked: none
+    data {
+      categories: <- sales.quarter
+      Axis x {
+        min: 0
+        max: 6
+        step: 1
+      }
+      Axis y {
+        min: 0
+        max: 120
+        step: 20
+      }
+      Series actual {
+        values: <- sales.amount
+        style {
+          color: "#a8b4c4"
+        }
+      }
+      Series next {
+        label: "Next year"
+        values: <- sales.amount * (1 + plan.growth / 100)
+        style {
+          color: "#3b6cf6"
+        }
+      }
+    }
+    style {
+      fill: none
+      stroke: none
+      gridColor: "#e2e8f0"
+      textColor: "#1e293b"
+      barCornerRadius: 6
+    }
+    layout {
+      position: 0, 0
+      size: 620, 300
+    }
+  }
+
+  Text growthLabel {
+    text: <- "Growth next year: " + plan.growth + " %"
+    layout {
+      position: 0, 312
+      size: 300, 22
+    }
+    style {
+      fontSize: 13
+      fontWeight: 600
+      textColor: "#1e293b"
+      textAlign: left
+    }
+  }
+
+  Component growth {
+    type: slider
+    value: <-> plan.growth
+    min: -20
+    max: 40
+    layout {
+      position: 320, 306
+      size: 300, 32
+    }
+    style {
+      accent: "#3b6cf6"
+    }
+  }
+}
+---
+{
+  "sales": [
+    { "quarter": "Q1", "amount": 42 },
+    { "quarter": "Q2", "amount": 55 },
+    { "quarter": "Q3", "amount": 38 },
+    { "quarter": "Q4", "amount": 61 },
+    { "quarter": "Q5", "amount": 70 },
+    { "quarter": "Q6", "amount": 48 }
+  ],
+  "plan": { "growth": 15 }
+}
+\end{sfl}
 \end{center}
 
 \begin{center}

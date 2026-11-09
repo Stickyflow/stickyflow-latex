@@ -67,9 +67,16 @@ if (!existsSync(join(BUILD, 'out/stickyflow-core.lua'))) {
   process.exit(1)
 }
 
+// Two files for a project: the package, and one Lua file with the loader and, preloaded in it, the translated core.
+rmSync(DIST, { recursive: true, force: true })
 mkdirSync(DIST, { recursive: true })
-cpSync(join(BUILD, 'out/stickyflow-core.lua'), join(DIST, 'stickyflow-core.lua'))
-for (const dir of ['lua', 'tex']) {
-  for (const name of readdirSync(join(ROOT, dir))) cpSync(join(ROOT, dir, name), join(DIST, name))
-}
-console.log(`dist/stickyflow-core.lua ${Math.round(statSync(join(DIST, 'stickyflow-core.lua')).size / 1024)} KB`)
+const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
+const core = readFileSync(join(BUILD, 'out/stickyflow-core.lua'), 'utf8')
+const loader = readFileSync(join(ROOT, 'lua/stickyflow.lua'), 'utf8')
+writeFileSync(
+  join(DIST, 'stickyflow.lua'),
+  `-- stickyflow ${version} for LuaLaTeX. Built from the sources of stickyflow.js; do not edit, see https://github.com/Stickyflow/stickyflow-latex.\n` +
+    `package.preload['stickyflow-core'] = function(...)\n${core}\nend\n\n${loader}`,
+)
+cpSync(join(ROOT, 'tex/stickyflow.sty'), join(DIST, 'stickyflow.sty'))
+for (const name of ['stickyflow.lua', 'stickyflow.sty']) console.log(`dist/${name} ${Math.round(statSync(join(DIST, name)).size / 1024)} KB`)
