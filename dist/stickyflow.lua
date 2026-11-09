@@ -565,6 +565,10 @@ function stickyflow.draw(svg, width, mark)
   local function walk(node, inherited)
     for _, child in ipairs(node.children or {}) do
       local name = child.name
+      -- Controls such as sliders are for the live figure, not for print.
+      if child.attrs and child.attrs['data-sf-role'] == 'widget' then
+        name = nil
+      end
       if name == 'g' then
         walk(child, inherited * num(child.attrs, 'opacity', 1))
       elseif name == 'text' then
