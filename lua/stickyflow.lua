@@ -410,7 +410,7 @@ local function rgbText(r, g, b)
   return string.format('%s,%s,%s', f(r), f(g), f(b))
 end
 
-function stickyflow.draw(svg, width)
+function stickyflow.draw(svg, width, mark)
   local root = parseSvg(svg)
   local vb = numbers(root.attrs.viewBox or ('0 0 ' .. (root.attrs.width or '100') .. ' ' .. (root.attrs.height or '100')))
   local vx, vy, vw, vh = vb[1], vb[2], vb[3], vb[4]
@@ -576,7 +576,8 @@ function stickyflow.draw(svg, width)
   end
   walk(root, 1)
 
-  return string.format('\\hbox to %sbp{\\vbox to %sbp{\\vss\\hbox to %sbp{\\sffamily%s\\hss}}}', f(vw * scale), f(height), f(vw * scale), table.concat(out))
+  local box = string.format('\\hbox to %sbp{\\vbox to %sbp{\\vss\\hbox to %sbp{%s\\sffamily%s\\hss}}}', f(vw * scale), f(height), f(vw * scale), mark or '', table.concat(out))
+  return box, vw * scale, height
 end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
@@ -591,15 +592,64 @@ local function readFile(name)
   return text
 end
 
--- Typesets an SFL figure at the given width in points (bp), or at its own size.
-function stickyflow.figure(source, width)
-  local svg = stickyflow.render(source)
-  local box = stickyflow.draw(svg, width)
+---------------------------------------------------------------------------------------------------------------------------------------------
+-- Carrying the figures in the PDF, for the stickyflow extension: each figure with its page, its place in points from the lower left of the
+-- page, its SFL and its data, in an attachment named stickyflow.json.
+
+local figures = {}
+
+-- Called when the page is written: the lower left corner of the figure is where TeX is now.
+function stickyflow.place(index)
+  local figure = figures[index]
+  local x, y = pdf.getpos()
+  local bp = 72 / 72.27 / 65536
+  figure.page = status.total_pages
+  figure.x, figure.y = x * bp, y * bp
+end
+
+local escapes = { ['"'] = '\\"', ['\\'] = '\\\\', ['\n'] = '\\n', ['\r'] = '\\r', ['\t'] = '\\t' }
+
+local function jsonString(s)
+  return '"' .. s:gsub('[%c"\\]', function(c)
+    return escapes[c] or string.format('\\u%04x', c:byte())
+  end) .. '"'
+end
+
+-- After the last page, when every figure has its place: the attachment, entered into the names of the PDF.
+function stickyflow.embed()
+  local placed = {}
+  for _, figure in ipairs(figures) do
+    if figure.page then
+      local parts = {
+        '"page":' .. figure.page,
+        string.format('"rect":[%s,%s,%s,%s]', f(figure.x), f(figure.y), f(figure.width), f(figure.height)),
+        '"sfl":' .. jsonString(figure.sfl),
+      }
+      if figure.data then parts[#parts + 1] = '"data":' .. figure.data end
+      placed[#placed + 1] = '{' .. table.concat(parts, ',') .. '}'
+    end
+  end
+  if #placed == 0 then return end
+  local json = '{"version":1,"figures":[' .. table.concat(placed, ',') .. ']}'
+  local stream = pdf.immediateobj('stream', json, '/Type /EmbeddedFile /Subtype /application#2Fjson')
+  local spec = pdf.immediateobj(string.format('<< /Type /Filespec /F (stickyflow.json) /UF (stickyflow.json) /Desc (stickyflow figures) /EF << /F %d 0 R >> >>', stream))
+  local names = pdf.immediateobj(string.format('<< /Names [(stickyflow.json) %d 0 R] >>', spec))
+  tex.sprint(string.format('\\pdfextension names{/EmbeddedFiles %d 0 R}', names))
+end
+
+-- Typesets an SFL figure at the given width in points (bp), or at its own size. The data, if any, is the JSON of the rows of its data
+-- sources.
+function stickyflow.figure(source, width, data)
+  local svg = stickyflow.render(source, data)
+  local index = #figures + 1
+  local box, w, h = stickyflow.draw(svg, width, '\\latelua{stickyflow.place(' .. index .. ')}')
+  figures[index] = { sfl = source, data = data, width = w, height = h }
   tex.sprint(box)
 end
 
-function stickyflow.figureFile(name, width)
-  stickyflow.figure(readFile(name), width)
+function stickyflow.figureFile(name, width, dataName)
+  local data = dataName and dataName ~= '' and readFile(dataName) or nil
+  stickyflow.figure(readFile(name), width, data)
 end
 
 return stickyflow

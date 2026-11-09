@@ -4,8 +4,11 @@
 \RequireLuaTeX
 \RequirePackage{xcolor}
 \directlua{stickyflow = require('stickyflow')}
+\AddToHook{enddocument/afterlastpage}{\directlua{stickyflow.embed()}}
 % \sflinput[width]{file.sfl}: the figure in the file, as wide as the width, which is the line by default.
-\newcommand\sflinput[2][\linewidth]{%
-  \directlua{stickyflow.figureFile('\luaescapestring{#2}', \number\dimexpr#1\relax / 65536 * 72 / 72.27)}%
+% \sflinput[width][data.json]{file.sfl}: the same, with the rows of its data sources as JSON.
+% The PDF carries the SFL of each figure, so that the stickyflow PDF extension can make it live.
+\NewDocumentCommand\sflinput{O{\linewidth}O{}m}{%
+  \leavevmode\directlua{stickyflow.figureFile('\luaescapestring{#3}', \number\dimexpr#1\relax / 65536 * 72 / 72.27, '\luaescapestring{#2}')}%
 }
 \endinput

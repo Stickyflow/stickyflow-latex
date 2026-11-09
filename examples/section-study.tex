@@ -2,10 +2,15 @@
 \usepackage[a4paper,margin=2.5cm]{geometry}
 \usepackage{stickyflow}
 \begin{document}
-\section*{A section, drawn by stickyflow in LuaLaTeX}
-The figure below is the SFL file \texttt{section-study.sfl}, rendered while this document compiles.
+\section*{Figures drawn by stickyflow in LuaLaTeX}
+Both figures are SFL files, rendered while this document compiles. The PDF carries their source, so the stickyflow PDF extension makes them
+live: move the sliders in the figures.
 
 \begin{center}
-\sflinput[0.9\linewidth]{section-study.sfl}
+\sflinput[0.8\linewidth][revenue.json]{revenue.sfl}
+\end{center}
+
+\begin{center}
+\sflinput[0.62\linewidth]{section-study.sfl}
 \end{center}
 \end{document}

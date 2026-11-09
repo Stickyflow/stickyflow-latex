@@ -1,0 +1,11 @@
+{
+  "sales": [
+    { "quarter": "Q1", "amount": 42 },
+    { "quarter": "Q2", "amount": 55 },
+    { "quarter": "Q3", "amount": 38 },
+    { "quarter": "Q4", "amount": 61 },
+    { "quarter": "Q5", "amount": 70 },
+    { "quarter": "Q6", "amount": 48 }
+  ],
+  "plan": { "growth": 15 }
+}
