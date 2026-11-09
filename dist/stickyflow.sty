@@ -11,4 +11,13 @@
 \NewDocumentCommand\sflinput{O{\linewidth}O{}m}{%
   \leavevmode\directlua{stickyflow.figureFile('\luaescapestring{#3}', \number\dimexpr#1\relax / 65536 * 72 / 72.27, '\luaescapestring{#2}')}%
 }
+% \begin{sfl}[width][data.json] ... \end{sfl}: the same, with the SFL written in the document. The package takes the lines of the
+% environment before TeX reads them and puts \stickyflowblock in its place, so the environment cannot stand inside the argument of another
+% command.
+\NewDocumentCommand\stickyflowblock{mmm}{%
+  \leavevmode\directlua{stickyflow.block(#1, \number\dimexpr#2\relax / 65536 * 72 / 72.27, '\luaescapestring{#3}')}%
+}
+\NewDocumentEnvironment{sfl}{}{%
+  \PackageError{stickyflow}{The sfl environment cannot stand inside the argument of a command}{Move it out, or keep the SFL in a file and use \string\sflinput.}%
+}{}
 \endinput

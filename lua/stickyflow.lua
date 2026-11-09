@@ -651,6 +651,52 @@ function stickyflow.figure(source, width, data)
   tex.sprint(box)
 end
 
+-- SFL written in the document, between \begin{sfl}[width][data.json] and \end{sfl}. Every line passes this filter before TeX reads it: the
+-- lines of the environment are kept as they are, so that braces, hashes and percent signs stay SFL, and the environment becomes one command
+-- that draws them. TeX never sees the SFL, so it cannot read ahead into it.
+local blocks = {}
+local capturing
+
+local function bracketed(text)
+  local inner, rest = text:match('^%s*%[(.-)%](.*)$')
+  return inner, rest or text
+end
+
+local function filter(line)
+  if capturing then
+    local from, to = line:find('\\end%s*{sfl}')
+    if from then
+      local head = line:sub(1, from - 1)
+      if head:find('%S') then capturing.lines[#capturing.lines + 1] = head end
+      blocks[#blocks + 1] = capturing
+      local command = string.format('\\stickyflowblock{%d}{%s}{%s}', #blocks, capturing.width, capturing.data)
+      capturing = nil
+      return command .. line:sub(to + 1)
+    end
+    capturing.lines[#capturing.lines + 1] = line
+    return '%'
+  end
+  local from, to = line:find('\\begin%s*{sfl}')
+  if not from or line:sub(1, from - 1):find('%%') then return nil end
+  local width, rest = bracketed(line:sub(to + 1))
+  local data
+  data, rest = bracketed(rest)
+  capturing = { lines = {}, width = width and width ~= '' and width or '\\linewidth', data = data or '' }
+  local head = line:sub(1, from - 1)
+  if rest:find('%S') then capturing.lines[1] = rest end
+  return head .. '%'
+end
+
+if luatexbase and luatexbase.add_to_callback then
+  luatexbase.add_to_callback('process_input_buffer', filter, 'stickyflow.environment')
+end
+
+function stickyflow.block(index, width, dataName)
+  local block = blocks[index]
+  local data = dataName and dataName ~= '' and readFile(dataName) or nil
+  stickyflow.figure(table.concat(block.lines, '\n'), width, data)
+end
+
 function stickyflow.figureFile(name, width, dataName)
   local data = dataName and dataName ~= '' and readFile(dataName) or nil
   stickyflow.figure(readFile(name), width, data)

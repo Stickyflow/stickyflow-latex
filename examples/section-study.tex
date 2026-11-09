@@ -3,8 +3,8 @@
 \usepackage{stickyflow}
 \begin{document}
 \section*{Figures drawn by stickyflow in LuaLaTeX}
-Both figures are SFL files, rendered while this document compiles. The PDF carries their source, so the stickyflow PDF extension makes them
-live: move the sliders in the figures.
+The first two figures are SFL files next to this document, the third is SFL written in it. All are rendered while this document compiles.
+The PDF carries their source, so the stickyflow PDF extension makes them live: move the sliders in the figures.
 
 \begin{center}
 \sflinput[0.8\linewidth][revenue.json]{revenue.sfl}
@@ -12,5 +12,43 @@ live: move the sliders in the figures.
 
 \begin{center}
 \sflinput[0.62\linewidth]{section-study.sfl}
+\end{center}
+
+\begin{center}
+\begin{sfl}[0.6\linewidth]
+sfl 1.6
+
+Model board {
+  Chart skills {
+    type: radar
+    text: "Team profile"
+    areaOpacity: 0.22
+    categories: ["Speed", "Quality", "Cost", "Reliability", "Support", "Reach"]
+
+    data {
+      Axis value { min: 0; max: 10; step: 2 }
+
+      now { label: "Today"; values: [8, 7, 5, 9, 6, 7]; color: "#0d9488" }
+      goal { label: "Target"; values: [9, 9, 7, 8, 9, 8]; color: "#f4694c" }
+    }
+
+    style {
+      radarStrokeWidth: 2.5
+      radarPointSize: 4
+      gridColor: "#e5e7eb"
+      textColor: "#111827"
+      showLegend: true
+      cornerRadius: 14
+      strokeWidth: 1
+      stroke: "#e5e7eb"
+      fill: "#ffffff"
+    }
+    layout {
+      position: 0, 0
+      size: 560, 440
+    }
+  }
+}
+\end{sfl}
 \end{center}
 \end{document}
