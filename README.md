@@ -40,6 +40,21 @@ A figure can also stay in a file of its own, with its data in another:
 Controls such as sliders are left out of print; they show in the extension, under the pointer. `examples/section-study.tex` is a complete
 document with both ways.
 
+### 3D scenes
+
+Only a browser draws a 3D scene, so in print it is a still picture, set into the place of the scene. Give the picture as the third optional
+argument, or put a picture with the name of the SFL file next to it, such as `robot-line.png` for `robot-line.sfl`:
+
+```latex
+\sflinput[0.9\linewidth]{robot-line.sfl}
+\sflinput[0.9\linewidth][][still.png]{robot-line.sfl}
+\begin{sfl}[0.9\linewidth][][still.png] ... \end{sfl}
+```
+
+The models the scene names are attached to the PDF. Upload them into the project as well; the package finds a model by its path, or by the
+last part of the path, so `/models/robot.glb` is also found as `robot.glb`. In the extension the scene can be turned and zoomed, and sliders
+drawn next to it in the same model stay still below it. `examples/robot-line.tex` is a complete document.
+
 ## How it works
 
 The static core of stickyflow.js, which renders SFL to SVG without a browser, is translated to Lua with TypeScriptToLua. Before that,
@@ -50,7 +65,7 @@ with it.
 In LaTeX, `lua/stickyflow.lua` renders the SFL to SVG with that core and draws the SVG as PDF operators: paths, shapes, arcs, arrow heads,
 clips, dashes and transparency. Shapes go into forms with their own resources, so the resources of the page stay as other packages set them.
 Texts are set by TeX in the fonts of the document. After the last page, the package attaches `stickyflow.json` with every figure for the
-extension.
+extension, and the models of its 3D scenes.
 
 ## Build
 
@@ -72,5 +87,5 @@ TEXINPUTS="../dist:" LUAINPUTS="../dist:" lualatex section-study.tex
 ## Not yet
 
 - Gradients are drawn in their middle color.
-- Shaders, 3D scenes and inputs, which only a browser draws. A 3D scene is to be placed as a still picture, with its model attached for the
-  extension.
+- Shaders and inputs, which only a browser draws.
+- Only the first 3D scene of a figure gets the still picture; further ones are a frame in print.

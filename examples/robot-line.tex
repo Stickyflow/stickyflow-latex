@@ -1,0 +1,20 @@
+% A 3D scene in a paper: in print the still picture robot-line.png, in the stickyflow viewer the live scene, with the model attached to
+% the PDF. Compile with LuaLaTeX.
+\documentclass{article}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{stickyflow}
+
+\begin{document}
+
+\section*{Robot line}
+
+A production hall, drawn from one model that is repeated in rows. In print the figure is a still picture of the scene. Opened with the
+stickyflow extension it can be turned and zoomed, and the sliders below it change the rows, their distance and the turn of each robot.
+
+\begin{figure}[h]
+  \centering
+  \sflinput[0.9\linewidth]{robot-line.sfl}
+  \caption{Robot line, a scene in three dimensions.}
+\end{figure}
+
+\end{document}

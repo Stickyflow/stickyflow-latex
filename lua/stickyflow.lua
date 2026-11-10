@@ -413,7 +413,7 @@ end
 -- The graphics states with transparency, by their fill and stroke alpha, shared by all figures of the document.
 local graphicsStates = { list = {} }
 
-function stickyflow.draw(svg, width, mark)
+function stickyflow.draw(svg, width, mark, picture)
   local root = parseSvg(svg)
   local vb = numbers(root.attrs.viewBox or ('0 0 ' .. (root.attrs.width or '100') .. ' ' .. (root.attrs.height or '100')))
   local vx, vy, vw, vh = vb[1], vb[2], vb[3], vb[4]
@@ -599,6 +599,29 @@ function stickyflow.draw(svg, width, mark)
     end
   end
 
+  -- A 3D scene only a browser draws. In print it is its still picture, or a frame that says where the scene is.
+  local stages = 0
+  local function stage(node)
+    local a = node.attrs
+    local x, y, w, h = num(a, 'x', 0), num(a, 'y', 0), num(a, 'width', 0), num(a, 'height', 0)
+    local px, py = (x - vx) * scale, height - (y + h - vy) * scale
+    stages = stages + 1
+    if picture and stages == 1 then
+      flushRun()
+      out[#out + 1] = string.format(
+        '\\rlap{\\kern%sbp\\raise%sbp\\hbox to %sbp{\\hss\\vbox to %sbp{\\vss\\hbox{\\includegraphics[width=%sbp,height=%sbp,keepaspectratio]{%s}}\\vss}\\hss}}',
+        f(px), f(py), f(w * scale), f(h * scale), f(w * scale), f(h * scale), picture
+      )
+      return
+    end
+    literal(string.format('0.95 0.95 0.94 rg 0.8 0.8 0.78 RG 1 w %s B', rectOps(x, y, w, h, 0, 0)))
+    flushRun()
+    out[#out + 1] = string.format(
+      '\\rlap{\\kern%sbp\\raise%sbp\\hbox to %sbp{\\hss\\fontsize{9bp}{11bp}\\selectfont\\color[rgb]{0.4,0.4,0.4}3D scene, live in the stickyflow viewer\\hss}}',
+      f(px), f(py + h * scale / 2), f(w * scale)
+    )
+  end
+
   local function walk(node, inherited)
     for _, child in ipairs(node.children or {}) do
       local name = child.name
@@ -606,7 +629,9 @@ function stickyflow.draw(svg, width, mark)
       if child.attrs and child.attrs['data-sf-role'] == 'widget' then
         name = nil
       end
-      if name == 'g' then
+      if name == 'foreignObject' and child.attrs['data-sf-mesh-stage'] then
+        stage(child)
+      elseif name == 'g' then
         walk(child, inherited * num(child.attrs, 'opacity', 1))
       elseif name == 'text' then
         flushRun()
@@ -635,6 +660,88 @@ local function readFile(name)
   return text
 end
 
+-- A file of the project, by its name, or by the last part of a path such as /models/robot.glb.
+local function findFile(name)
+  for _, candidate in ipairs({ name, (name:gsub('^/+', '')), name:match('[^/\\]+$') }) do
+    local path = kpse and kpse.find_file(candidate) or nil
+    if path then return path end
+    local file = io.open(candidate, 'rb')
+    if file then
+      file:close()
+      return candidate
+    end
+  end
+  return nil
+end
+
+local function warn(message)
+  texio.write_nl('term and log', 'Package stickyflow Warning: ' .. message)
+end
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+-- A scene with controls next to it becomes two drawings for the viewer: the scene, which is turned and zoomed, and the controls, which stay
+-- still below it. The SFL is cut by its blocks, so both keep the Parameters and everything outside the model of the scene.
+
+local function blocksOf(source)
+  local blocks, open = {}, {}
+  local i, n, lineStart = 1, #source, 1
+  while i <= n do
+    local c = source:sub(i, i)
+    if c == '"' then
+      i = i + 1
+      while i <= n and source:sub(i, i) ~= '"' do
+        if source:sub(i, i) == '\\' then i = i + 1 end
+        i = i + 1
+      end
+    elseif c == '/' and source:sub(i + 1, i + 1) == '/' then
+      while i <= n and source:sub(i, i) ~= '\n' do i = i + 1 end
+      lineStart = i + 1
+    elseif c == '\n' then
+      lineStart = i + 1
+    elseif c == '{' then
+      local block = { header = source:sub(lineStart, i - 1):match('^%s*(.-)%s*$'), from = lineStart, parent = open[#open] }
+      blocks[#blocks + 1] = block
+      open[#open + 1] = block
+    elseif c == '}' and #open > 0 then
+      local block = table.remove(open)
+      local lineEnd = source:find('\n', i, true) or n
+      block.to = lineEnd
+    end
+    i = i + 1
+  end
+  return blocks
+end
+
+local drawn = { Shape = true, Text = true, Component = true, Group = true, Image = true, Chart = true, Table = true, Icon = true }
+
+local function without(source, cuts)
+  table.sort(cuts, function(a, b) return a.from > b.from end)
+  for _, cut in ipairs(cuts) do source = source:sub(1, cut.from - 1) .. source:sub(cut.to + 1) end
+  return source
+end
+
+local function splitScene(source)
+  local blocks = blocksOf(source)
+  local scene
+  for _, block in ipairs(blocks) do
+    if block.to and block.header:match('^Scene%s+[%w_]+$') then
+      scene = block
+      break
+    end
+  end
+  if not scene then return source, nil end
+  local siblings, live = {}, false
+  for _, block in ipairs(blocks) do
+    local kind = block.header:match('^(%u%w*)%s+[%w_]+$')
+    if block ~= scene and block.to and block.parent == scene.parent and kind and (scene.parent or drawn[kind]) then
+      siblings[#siblings + 1] = block
+      if source:sub(block.from, block.to):find('<->', 1, true) then live = true end
+    end
+  end
+  if not live then return source, nil end
+  return without(source, siblings), without(source, { scene })
+end
+
 ---------------------------------------------------------------------------------------------------------------------------------------------
 -- Carrying the figures in the PDF, for the stickyflow extension: each figure with its page, its place in points from the lower left of the
 -- page, its SFL and its data, in an attachment named stickyflow.json.
@@ -658,6 +765,13 @@ local function jsonString(s)
   end) .. '"'
 end
 
+local function pdfString(s)
+  return '(' .. s:gsub('[()\\]', '\\%0') .. ')'
+end
+
+-- The files attached for the scenes, by their path, and the names they have in the PDF.
+local attached = { list = {}, names = { ['stickyflow.json'] = true } }
+
 -- After the last page, when every figure has its place: the attachment, entered into the names of the PDF.
 function stickyflow.embed()
   local placed = {}
@@ -668,25 +782,83 @@ function stickyflow.embed()
         string.format('"rect":[%s,%s,%s,%s]', f(figure.x), f(figure.y), f(figure.width), f(figure.height)),
         '"sfl":' .. jsonString(figure.sfl),
       }
+      if figure.controls then parts[#parts + 1] = '"controls":' .. jsonString(figure.controls) end
       if figure.data then parts[#parts + 1] = '"data":' .. figure.data end
+      if next(figure.assets) then
+        local assets = {}
+        for asset, name in pairs(figure.assets) do assets[#assets + 1] = jsonString(asset) .. ':' .. jsonString(name) end
+        table.sort(assets)
+        parts[#parts + 1] = '"assets":{' .. table.concat(assets, ',') .. '}'
+      end
       placed[#placed + 1] = '{' .. table.concat(parts, ',') .. '}'
     end
   end
   if #placed == 0 then return end
   local json = '{"version":1,"figures":[' .. table.concat(placed, ',') .. ']}'
   local stream = pdf.immediateobj('stream', json, '/Type /EmbeddedFile /Subtype /application#2Fjson')
-  local spec = pdf.immediateobj(string.format('<< /Type /Filespec /F (stickyflow.json) /UF (stickyflow.json) /Desc (stickyflow figures) /EF << /F %d 0 R >> >>', stream))
-  local names = pdf.immediateobj(string.format('<< /Names [(stickyflow.json) %d 0 R] >>', spec))
+  local entries = { { name = 'stickyflow.json', spec = pdf.immediateobj(string.format('<< /Type /Filespec /F (stickyflow.json) /UF (stickyflow.json) /Desc (stickyflow figures) /EF << /F %d 0 R >> >>', stream)) } }
+  for _, file in ipairs(attached.list) do
+    local content = pdf.immediateobj('streamfile', file.path, '/Type /EmbeddedFile /Subtype /model#2Fgltf-binary')
+    entries[#entries + 1] = { name = file.name, spec = pdf.immediateobj(string.format('<< /Type /Filespec /F %s /UF %s /Desc (model of a stickyflow scene) /EF << /F %d 0 R >> >>', pdfString(file.name), pdfString(file.name), content)) }
+  end
+  -- The names of a name tree are sorted.
+  table.sort(entries, function(a, b) return a.name < b.name end)
+  local list = {}
+  for _, entry in ipairs(entries) do list[#list + 1] = string.format('%s %d 0 R', pdfString(entry.name), entry.spec) end
+  local names = pdf.immediateobj('<< /Names [' .. table.concat(list, ' ') .. '] >>')
   tex.sprint(string.format('\\pdfextension names{/EmbeddedFiles %d 0 R}', names))
 end
 
+-- The files a scene names, such as its 3D models, each attached once to the PDF under the last part of its name.
+local function attach(source)
+  local assets = {}
+  for asset in source:gmatch('asset%s*:%s*"([^"]+)"') do
+    if not assets[asset] then
+      local path = findFile(asset)
+      if not path then
+        warn('the file ' .. asset .. ' of a 3D scene is not in the project; the scene will miss it in the viewer')
+      else
+        local file = attached[path]
+        if not file then
+          local base = path:match('[^/\\]+$')
+          local name, count = base, 1
+          while attached.names[name] do
+            count = count + 1
+            name = base:gsub('(%.?[^.]*)$', '-' .. count .. '%1', 1)
+          end
+          file = { path = path, name = name }
+          attached[path], attached.names[name] = file, true
+          attached.list[#attached.list + 1] = file
+        end
+        assets[asset] = file.name
+      end
+    end
+  end
+  return assets
+end
+
+-- The still picture of a scene in a file: the one given, or a picture with the name of the file next to it.
+local function stillFor(source, picture, fileName)
+  if picture and picture ~= '' then return picture end
+  if not source:find('Scene%s+[%w_]+%s*{') then return nil end
+  if fileName then
+    local base = fileName:gsub('%.[^./\\]*$', '')
+    for _, extension in ipairs({ '.png', '.jpg', '.pdf' }) do
+      if findFile(base .. extension) then return base .. extension end
+    end
+  end
+  warn('a 3D scene has no still picture; print shows a frame in its place')
+  return nil
+end
+
 -- Typesets an SFL figure at the given width in points (bp), or at its own size. The data, if any, is the JSON of the rows of its data
--- sources.
-function stickyflow.figure(source, width, data)
+-- sources; the picture, if any, is the still of its 3D scene.
+function stickyflow.figure(source, width, data, picture)
   local svg = stickyflow.render(source, data)
   local index = #figures + 1
-  local box, w, h = stickyflow.draw(svg, width, '\\latelua{stickyflow.place(' .. index .. ')}')
-  figures[index] = { sfl = source, data = data, width = w, height = h }
+  local box, w, h = stickyflow.draw(svg, width, '\\latelua{stickyflow.place(' .. index .. ')}', picture)
+  local scene, controls = splitScene(source)
+  figures[index] = { sfl = scene, controls = controls, data = data, assets = attach(source), width = w, height = h }
   tex.sprint(box)
 end
 
@@ -708,7 +880,7 @@ local function filter(line)
       local head = line:sub(1, from - 1)
       if head:find('%S') then capturing.lines[#capturing.lines + 1] = head end
       blocks[#blocks + 1] = capturing
-      local command = string.format('\\stickyflowblock{%d}{%s}{%s}', #blocks, capturing.width, capturing.data)
+      local command = string.format('\\stickyflowblock{%d}{%s}{%s}{%s}', #blocks, capturing.width, capturing.data, capturing.picture)
       capturing = nil
       return command .. line:sub(to + 1)
     end
@@ -718,9 +890,10 @@ local function filter(line)
   local from, to = line:find('\\begin%s*{sfl}')
   if not from or line:sub(1, from - 1):find('%%') then return nil end
   local width, rest = bracketed(line:sub(to + 1))
-  local data
+  local data, picture
   data, rest = bracketed(rest)
-  capturing = { lines = {}, width = width and width ~= '' and width or '\\linewidth', data = data or '' }
+  picture, rest = bracketed(rest)
+  capturing = { lines = {}, width = width and width ~= '' and width or '\\linewidth', data = data or '', picture = picture or '' }
   local head = line:sub(1, from - 1)
   if rest:find('%S') then capturing.lines[1] = rest end
   return head .. '%'
@@ -731,7 +904,7 @@ if luatexbase and luatexbase.add_to_callback then
 end
 
 -- The rows of the data sources can follow the SFL in the environment, after a line of three dashes, as JSON.
-function stickyflow.block(index, width, dataName)
+function stickyflow.block(index, width, dataName, picture)
   local block = blocks[index]
   local sfl, rows = {}, nil
   for _, line in ipairs(block.lines) do
@@ -744,12 +917,14 @@ function stickyflow.block(index, width, dataName)
     end
   end
   local data = rows and table.concat(rows, '\n') or (dataName and dataName ~= '' and readFile(dataName)) or nil
-  stickyflow.figure(table.concat(sfl, '\n'), width, data)
+  local source = table.concat(sfl, '\n')
+  stickyflow.figure(source, width, data, stillFor(source, picture))
 end
 
-function stickyflow.figureFile(name, width, dataName)
+function stickyflow.figureFile(name, width, dataName, picture)
   local data = dataName and dataName ~= '' and readFile(dataName) or nil
-  stickyflow.figure(readFile(name), width, data)
+  local source = readFile(name)
+  stickyflow.figure(source, width, data, stillFor(source, picture, name))
 end
 
 return stickyflow

@@ -1,22 +1,25 @@
 \NeedsTeXFormat{LaTeX2e}
-\ProvidesPackage{stickyflow}[2026/11/08 v0.1 SFL figures drawn by LuaLaTeX]
+\ProvidesPackage{stickyflow}[2026/11/09 v0.1 SFL figures drawn by LuaLaTeX]
 \RequirePackage{iftex}
 \RequireLuaTeX
 \RequirePackage{xcolor}
+\RequirePackage{graphicx}
 \newbox\stickyflowbox
 \directlua{stickyflow = require('stickyflow')}
 \AddToHook{enddocument/afterlastpage}{\directlua{stickyflow.embed()}}
 % \sflinput[width]{file.sfl}: the figure in the file, as wide as the width, which is the line by default.
 % \sflinput[width][data.json]{file.sfl}: the same, with the rows of its data sources as JSON.
+% \sflinput[width][data.json][still.png]{file.sfl}: a 3D scene, with its still picture for print. Without one, a picture with the name of
+% the file, such as file.png, is used. The models the scene names are attached to the PDF.
 % The PDF carries the SFL of each figure, so that the stickyflow PDF extension can make it live.
-\NewDocumentCommand\sflinput{O{\linewidth}O{}m}{%
-  \leavevmode\directlua{stickyflow.figureFile('\luaescapestring{#3}', \number\dimexpr#1\relax / 65536 * 72 / 72.27, '\luaescapestring{#2}')}%
+\NewDocumentCommand\sflinput{O{\linewidth}O{}O{}m}{%
+  \leavevmode\directlua{stickyflow.figureFile('\luaescapestring{#4}', \number\dimexpr#1\relax / 65536 * 72 / 72.27, '\luaescapestring{#2}', '\luaescapestring{#3}')}%
 }
-% \begin{sfl}[width][data.json] ... \end{sfl}: the same, with the SFL written in the document. The package takes the lines of the
-% environment before TeX reads them and puts \stickyflowblock in its place, so the environment cannot stand inside the argument of another
-% command.
-\NewDocumentCommand\stickyflowblock{mmm}{%
-  \leavevmode\directlua{stickyflow.block(#1, \number\dimexpr#2\relax / 65536 * 72 / 72.27, '\luaescapestring{#3}')}%
+% \begin{sfl}[width][data.json][still.png] ... \end{sfl}: the same, with the SFL written in the document. The package takes the lines of
+% the environment before TeX reads them and puts \stickyflowblock in its place, so the environment cannot stand inside the argument of
+% another command.
+\NewDocumentCommand\stickyflowblock{mmmm}{%
+  \leavevmode\directlua{stickyflow.block(#1, \number\dimexpr#2\relax / 65536 * 72 / 72.27, '\luaescapestring{#3}', '\luaescapestring{#4}')}%
 }
 \NewDocumentEnvironment{sfl}{}{%
   \PackageError{stickyflow}{The sfl environment cannot stand inside the argument of a command}{Move it out, or keep the SFL in a file and use \string\sflinput.}%

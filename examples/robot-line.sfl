@@ -1,0 +1,162 @@
+// A hall of robots. One Mesh in a Repeat, and the numbers of the hall are sliders below the scene.
+sfl 1.11
+
+Parameters hall {
+  across: 5 // 1..8 step 1, Robots across
+  deep: 3 // 1..6 step 1, Rows
+  gap: 2 // 1.2..4 step 0.2, Distance
+  turn: 25 // 0..90 step 5, Turn per robot
+}
+
+Model line {
+  Scene world {
+    orbit: 35, 26
+    shadow: true
+    layout {
+      position: 0, 0
+      size: 1000, 700
+    }
+
+    Repeat robots {
+      columns: across
+      rows: deep
+
+      Mesh robot {
+        asset: "models/robot.glb"
+        style {
+          color: mix("#7c3aed", "#e0482b", col / max(1, across - 1))
+          roughness: 0.35
+          metallic: 0.5
+        }
+        layout {
+          position: col * gap, 0, row * gap
+          rotation: 0, (col + row) * turn, 0
+        }
+      }
+    }
+  }
+
+  Shape controlBand {
+    layout {
+      position: 0, 700
+      size: 1000, 120
+    }
+    style {
+      shape: rectangle
+      fill: "#f1efe8"
+      stroke: "#e2dfd4"
+    }
+  }
+  Text acrossLabel {
+    text: <- "Robots across  " + hall.across
+    layout {
+      position: 60, 726
+      size: 210, 20
+    }
+    style {
+      fontSize: 13
+      fontWeight: 600
+      textColor: "#0b0b0b"
+      textAlign: left
+    }
+  }
+  Component acrossControl {
+    type: slider
+    value: <-> hall.across
+    min: 1
+    max: 8
+    layout {
+      position: 60, 754
+      size: 200, 32
+    }
+    style {
+      accent: "#0b0b0b"
+      track: "#d6d2c6"
+      step: 1
+    }
+  }
+  Text deepLabel {
+    text: <- "Rows  " + hall.deep
+    layout {
+      position: 290, 726
+      size: 210, 20
+    }
+    style {
+      fontSize: 13
+      fontWeight: 600
+      textColor: "#0b0b0b"
+      textAlign: left
+    }
+  }
+  Component deepControl {
+    type: slider
+    value: <-> hall.deep
+    min: 1
+    max: 6
+    layout {
+      position: 290, 754
+      size: 200, 32
+    }
+    style {
+      accent: "#0b0b0b"
+      track: "#d6d2c6"
+      step: 1
+    }
+  }
+  Text gapLabel {
+    text: <- "Distance  " + hall.gap
+    layout {
+      position: 520, 726
+      size: 210, 20
+    }
+    style {
+      fontSize: 13
+      fontWeight: 600
+      textColor: "#0b0b0b"
+      textAlign: left
+    }
+  }
+  Component gapControl {
+    type: slider
+    value: <-> hall.gap
+    min: 1.2
+    max: 4
+    layout {
+      position: 520, 754
+      size: 200, 32
+    }
+    style {
+      accent: "#0b0b0b"
+      track: "#d6d2c6"
+      step: 0.2
+    }
+  }
+  Text turnLabel {
+    text: <- "Turn per robot  " + hall.turn + "°"
+    layout {
+      position: 750, 726
+      size: 210, 20
+    }
+    style {
+      fontSize: 13
+      fontWeight: 600
+      textColor: "#0b0b0b"
+      textAlign: left
+    }
+  }
+  Component turnControl {
+    type: slider
+    value: <-> hall.turn
+    min: 0
+    max: 90
+    layout {
+      position: 750, 754
+      size: 200, 32
+    }
+    style {
+      accent: "#0b0b0b"
+      track: "#d6d2c6"
+      step: 5
+    }
+  }
+}
