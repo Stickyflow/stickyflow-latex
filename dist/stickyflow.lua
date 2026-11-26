@@ -2843,8 +2843,8 @@ local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local __TS__ArrayPush = ____lualib.__TS__ArrayPush
 local __TS__StringSplit = ____lualib.__TS__StringSplit
 local __TS__ArraySlice = ____lualib.__TS__ArraySlice
-local Map = ____lualib.Map
 local __TS__ArrayIsArray = ____lualib.__TS__ArrayIsArray
+local Map = ____lualib.Map
 local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
 local __TS__ArraySort = ____lualib.__TS__ArraySort
 local Error = ____lualib.Error
@@ -3505,6 +3505,9 @@ function ____exports.__is(self, a, b)
         return 1 / a == 1 / b
     end
     return a == b or a ~= a and b ~= b
+end
+function ____exports.__isArray(self, value)
+    return __TS__ArrayIsArray(value)
 end
 function ____exports.__isFinite(self, value)
     return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
@@ -44150,6 +44153,7 @@ local __TS__ArraySlice = ____lualib.__TS__ArraySlice
 local ____exports = {}
 local inferBinary, inferMath, inferLeft, inferTextQuestion, inferCall, arithmetic, evaluateBinary, isNumeric, isList, MATH, text
 local ______shims = require("core.__shims")
+local __isArray = ______shims.__isArray
 local __t = ______shims.__t
 local ____types = require("core.binding.types")
 local sameType = ____types.sameType
@@ -44563,7 +44567,7 @@ function ____exports.evaluate(self, expr, env)
                             function(____, value) return __TS__ArrayIsArray(value) and #value or 0 end
                         ))
                     )
-                    if length == 0 and not __TS__ArraySome(values, Array.isArray) then
+                    if length == 0 and not __TS__ArraySome(values, __isArray) then
                         return MATH[name]:apply(values)
                     end
                     return __TS__ArrayFrom(

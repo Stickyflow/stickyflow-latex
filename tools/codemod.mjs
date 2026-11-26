@@ -49,7 +49,7 @@ const isFunction = (node) => checker.getTypeAtLocation(node).getCallSignatures()
 const STRING_METHODS = new Set(['replace', 'replaceAll', 'split', 'match', 'matchAll', 'search'])
 const CALLS = { 'Math.hypot': '__hypot', 'Math.imul': '__imul', 'Object.is': '__is', 'Number.isFinite': '__isFinite', 'JSON.stringify': '__json', 'JSON.parse': '__jsonParse' }
 const GLOBAL_CALLS = { structuredClone: '__clone', queueMicrotask: '__microtask' }
-const VALUES = { 'Number.isFinite': '__isFinite' }
+const VALUES = { 'Number.isFinite': '__isFinite', 'Array.isArray': '__isArray' }
 
 let changedFiles = 0
 for (const sf of program.getSourceFiles()) {
