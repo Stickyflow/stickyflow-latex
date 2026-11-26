@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1, 26 November 2026
+
+- A figure whose bindings call a math function such as `max`, `sin` or `round` is drawn again. In 0.1.0 it stopped the document with an error about `Array`.
+
 ## 0.1.0, 26 November 2026
 
 The first release. Built from stickyflow.js 0.23.1.

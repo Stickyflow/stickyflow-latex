@@ -1,4 +1,4 @@
--- stickyflow 0.1.0 for LuaLaTeX, licensed under the Apache License 2.0.
+-- stickyflow 0.1.1 for LuaLaTeX, licensed under the Apache License 2.0.
 -- Built from the sources of stickyflow.js 0.23.1; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
 package.preload['stickyflow-core'] = function(...)
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
