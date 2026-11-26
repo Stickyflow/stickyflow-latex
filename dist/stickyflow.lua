@@ -1,4 +1,5 @@
--- stickyflow 0.1.0 for LuaLaTeX. Built from the sources of stickyflow.js; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
+-- stickyflow 0.1.0 for LuaLaTeX, licensed under the Apache License 2.0.
+-- Built from the sources of stickyflow.js 0.23.1; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
 package.preload['stickyflow-core'] = function(...)
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
 
@@ -4419,9 +4420,13 @@ ____exports.NAMED_BLOCK_KINDS = {
     "Image",
     "Isometric",
     "Mesh",
+    "Solid",
+    "Facets",
+    "Terrain",
     "Canvas",
     "Scene",
     "Light",
+    "Ground",
     "Dimension",
     "Link",
     "Connection",
@@ -4434,6 +4439,13 @@ ____exports.NAMED_BLOCK_KINDS = {
     "Net",
     "Symbol",
     "Port",
+    "Cut",
+    "Add",
+    "Keep",
+    "Sketch",
+    "Rect",
+    "Circle",
+    "Outline",
     "DataSource",
     "Repeat",
     "Template",
@@ -4746,6 +4758,10 @@ function ____exports.emitValue(self, value)
         ____cond3 = ____cond3 or ____switch3 == "ident"
         if ____cond3 then
             return table.concat(value.segments, ".")
+        end
+        ____cond3 = ____cond3 or ____switch3 == "each"
+        if ____cond3 then
+            return (value.row .. " in ") .. value.source
         end
         ____cond3 = ____cond3 or ____switch3 == "expr"
         if ____cond3 then
@@ -6342,9 +6358,21 @@ end
 function PropertyParser.prototype.parseProperty(self)
     local key = self.cursor:expect("ident", "property key").value
     self.cursor:expect("colon", "':'")
-    local value = (key == "from" or key == "to") and parseEndpoint(nil, self.cursor) or parseValue(nil, self.cursor)
+    local value = (key == "from" or key == "to") and parseEndpoint(nil, self.cursor) or (key == "each" and self:parseEach() or parseValue(nil, self.cursor))
     self:consumeTerminator()
     return {key = key, value = value}
+end
+function PropertyParser.prototype.parseEach(self)
+    local row = self.cursor:expect("ident", "a name for one row").value
+    local word = self.cursor:expect("ident", "'in'")
+    if word.value ~= "in" then
+        error(
+            __TS__New(SflParseError, "each is written as 'each: row in table'", word.line, word.col),
+            0
+        )
+    end
+    local source = self.cursor:expect("ident", "the name of a DataSource").value
+    return {type = "each", row = row, source = source}
 end
 function PropertyParser.prototype.parsePropertyBlock(self, kind)
     self.cursor:skipNewlines()
@@ -6972,7 +7000,6 @@ return ____exports
 local ____lualib = require("lualib_bundle")
 local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local ____exports = {}
-local scalarValue
 local ______shims = require("core.__shims")
 local __t = ______shims.__t
 local ____functions = require("core.sflLanguage.expansion.functions")
@@ -7082,7 +7109,8 @@ function ____exports.evaluate(self, scope, expr)
         end
     until true
 end
-function scalarValue(self, scope, only)
+____exports.round = function(____, value) return math.floor(value * 1000 + 0.5) / 1000 end
+local function scalarValue(self, scope, only)
     if type(only) == "number" then
         return {
             type = "number",
@@ -7100,24 +7128,19 @@ function scalarValue(self, scope, only)
         segments = {tostring(only)}
     }
 end
-function ____exports.resolveNumeric(self, scope, value)
-    local name = value.type == "ident" and #value.segments == 1 and value.segments[1] or nil
-    local ____temp_2
-    if name == nil then
-        ____temp_2 = nil
-    else
-        local ____temp_1 = scope.vars:get(name)
-        if ____temp_1 == nil then
-            ____temp_1 = scope.params:get(name)
-        end
-        ____temp_2 = ____temp_1
-    end
-    local known = ____temp_2
-    return known == nil and ____exports.resolveValue(nil, scope, value) or scalarValue(nil, scope, known)
-end
 function ____exports.resolveValue(self, scope, value)
-    if scope.substitute and value.type == "ident" and #value.segments == 1 then
-        local known = scope.vars:get(value.segments[1])
+    if value.type == "ident" and #value.segments > 1 then
+        local field = scope.vars:get(table.concat(value.segments, "."))
+        if field ~= nil then
+            return scalarValue(nil, scope, field)
+        end
+    end
+    if value.type == "ident" and #value.segments == 1 then
+        local ____temp_1 = scope.vars:get(value.segments[1])
+        if ____temp_1 == nil then
+            ____temp_1 = scope.params:get(value.segments[1])
+        end
+        local known = ____temp_1
         if known ~= nil then
             return scalarValue(nil, scope, known)
         end
@@ -7127,7 +7150,7 @@ function ____exports.resolveValue(self, scope, value)
             type = "list",
             values = __TS__ArrayMap(
                 value.values,
-                function(____, item) return ____exports.resolveNumeric(nil, scope, item) end
+                function(____, item) return ____exports.resolveValue(nil, scope, item) end
             )
         }
     end
@@ -7152,15 +7175,20 @@ function ____exports.resolveValue(self, scope, value)
         )
     }
 end
-____exports.round = function(____, value) return math.floor(value * 1000 + 0.5) / 1000 end
 return ____exports
  end,
 ["core.sflLanguage.expansion.instance"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local __TS__ArraySlice = ____lualib.__TS__ArraySlice
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
 local ____exports = {}
-local knownNames, bindingOf, propertiesOf, entryOf
+local knownNames, bindingOf, handlerOf, propertiesOf, referenceOf, entryOf, REFERENCES
+local ______shims = require("core.__shims")
+local __t = ______shims.__t
 local ____evaluation = require("core.sflLanguage.expansion.evaluation")
 local resolveValue = ____evaluation.resolveValue
 function knownNames(self, scope, expr)
@@ -7177,7 +7205,7 @@ function knownNames(self, scope, expr)
                     end
                     ____temp_1 = ____temp_0
                 else
-                    ____temp_1 = nil
+                    ____temp_1 = scope.vars:get(table.concat(expr.path, "."))
                 end
                 local value = ____temp_1
                 if type(value) == "number" then
@@ -7231,6 +7259,20 @@ function bindingOf(self, scope, binding)
         {expr = knownNames(nil, scope, binding.expr)}
     )
 end
+function handlerOf(self, scope, handler)
+    return __TS__ObjectAssign(
+        {},
+        handler,
+        {assignments = __TS__ArrayMap(
+            handler.assignments,
+            function(____, assignment) return __TS__ObjectAssign(
+                {},
+                assignment,
+                {expr = knownNames(nil, scope, assignment.expr)}
+            ) end
+        )}
+    )
+end
 function propertiesOf(self, scope, properties)
     return __TS__ArrayMap(
         properties,
@@ -7240,21 +7282,50 @@ function propertiesOf(self, scope, properties)
         } end
     )
 end
-function entryOf(self, scope, entry, rename)
+function referenceOf(self, key, value, rename, ____local)
+    local ____temp_2 = (value.type == "ident" or value.type == "endpoint") and value.segments or ({})
+    local first = ____temp_2[1]
+    local rest = __TS__ArraySlice(____temp_2, 1)
+    if first == nil or not ____local:has(first) then
+        return value
+    end
+    if value.type == "endpoint" then
+        return __TS__ObjectAssign(
+            {},
+            value,
+            {segments = {
+                rename(nil, first),
+                table.unpack(rest)
+            }}
+        )
+    end
+    return value.type == "ident" and REFERENCES:has(key) and #rest == 0 and __TS__ObjectAssign(
+        {},
+        value,
+        {segments = {rename(nil, first)}}
+    ) or value
+end
+function entryOf(self, scope, entry, rename, ____local)
     repeat
-        local ____switch12 = entry.type
-        local ____cond12 = ____switch12 == "property"
-        if ____cond12 then
+        local ____switch17 = entry.type
+        local ____cond17 = ____switch17 == "property"
+        if ____cond17 then
             return {
                 type = "property",
                 property = {
                     key = entry.property.key,
-                    value = resolveValue(nil, scope, entry.property.value)
+                    value = referenceOf(
+                        nil,
+                        entry.property.key,
+                        resolveValue(nil, scope, entry.property.value),
+                        rename,
+                        ____local
+                    )
                 }
             }
         end
-        ____cond12 = ____cond12 or ____switch12 == "layout"
-        if ____cond12 then
+        ____cond17 = ____cond17 or ____switch17 == "layout"
+        if ____cond17 then
             return {
                 type = "layout",
                 layout = __TS__ObjectAssign(
@@ -7266,8 +7337,8 @@ function entryOf(self, scope, entry, rename)
                 )
             }
         end
-        ____cond12 = ____cond12 or ____switch12 == "style"
-        if ____cond12 then
+        ____cond17 = ____cond17 or ____switch17 == "style"
+        if ____cond17 then
             return {
                 type = "style",
                 style = __TS__ObjectAssign(
@@ -7281,18 +7352,31 @@ function entryOf(self, scope, entry, rename)
                 )
             }
         end
-        ____cond12 = ____cond12 or ____switch12 == "binding"
-        if ____cond12 then
+        ____cond17 = ____cond17 or ____switch17 == "binding"
+        if ____cond17 then
             return {
                 type = "binding",
                 binding = bindingOf(nil, scope, entry.binding)
             }
         end
-        ____cond12 = ____cond12 or ____switch12 == "block"
-        if ____cond12 then
+        ____cond17 = ____cond17 or ____switch17 == "handler"
+        if ____cond17 then
+            return {
+                type = "handler",
+                handler = handlerOf(nil, scope, entry.handler)
+            }
+        end
+        ____cond17 = ____cond17 or ____switch17 == "block"
+        if ____cond17 then
             return {
                 type = "block",
-                block = ____exports.instance(nil, scope, entry.block, rename)
+                block = ____exports.instance(
+                    nil,
+                    scope,
+                    entry.block,
+                    rename,
+                    ____local
+                )
             }
         end
         do
@@ -7300,7 +7384,10 @@ function entryOf(self, scope, entry, rename)
         end
     until true
 end
-function ____exports.instance(self, scope, block, rename)
+function ____exports.instance(self, scope, block, rename, ____local)
+    if ____local == nil then
+        ____local = __TS__New(Set)
+    end
     return __TS__ObjectAssign(
         {},
         block,
@@ -7308,9 +7395,293 @@ function ____exports.instance(self, scope, block, rename)
             name = rename(nil, block.name),
             entries = __TS__ArrayMap(
                 block.entries,
-                function(____, entry) return entryOf(nil, scope, entry, rename) end
+                function(____, entry) return entryOf(
+                    nil,
+                    scope,
+                    entry,
+                    rename,
+                    ____local
+                ) end
             )
         }
+    )
+end
+REFERENCES = __TS__New(Set, {"sketch", "anchor", "picture"})
+function ____exports.namesIn(self, blocks)
+    local names = __TS__New(Set)
+    local visit
+    visit = function(____, block)
+        if __t(nil, block.name) then
+            names:add(block.name)
+        end
+        for ____, entry in ipairs(block.entries) do
+            if entry.type == "block" then
+                visit(nil, entry.block)
+            end
+        end
+    end
+    __TS__ArrayForEach(blocks, visit)
+    return names
+end
+return ____exports
+ end,
+["core.sflLanguage.expansion.placement"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayFind = ____lualib.__TS__ArrayFind
+local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local __TS__ArraySome = ____lualib.__TS__ArraySome
+local Map = ____lualib.Map
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayReduce = ____lualib.__TS__ArrayReduce
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __lor = ______shims.__lor
+local __t = ______shims.__t
+local ____evaluation = require("core.sflLanguage.expansion.evaluation")
+local resolveValue = ____evaluation.resolveValue
+local ____random = require("core.sflLanguage.expansion.random")
+local Random = ____random.Random
+local ____scope = require("core.sflLanguage.expansion.scope")
+local fail = ____scope.fail
+function ____exports.turnMatrix(self, ____bindingPattern0)
+    local z
+    local y
+    local x
+    x = ____bindingPattern0[1]
+    y = ____bindingPattern0[2]
+    z = ____bindingPattern0[3]
+    local a, b, c = table.unpack(
+        __TS__ArrayMap(
+            {x, y, z},
+            function(____, angle) return angle * math.pi / 180 end
+        ),
+        1,
+        3
+    )
+    local sa, ca, sb, cb, sc, cc = math.sin(a), math.cos(a), math.sin(b), math.cos(b), math.sin(c), math.cos(c)
+    return {
+        cc * cb,
+        cc * sb * sa - sc * ca,
+        cc * sb * ca + sc * sa,
+        sc * cb,
+        sc * sb * sa + cc * ca,
+        sc * sb * ca - cc * sa,
+        -sb,
+        cb * sa,
+        cb * ca
+    }
+end
+function ____exports.turnDegrees(self, m)
+    local function degrees(____, radians)
+        return __lor(
+            nil,
+            math.floor(radians * 180 / math.pi * 1000000 + 0.5) / 1000000,
+            function() return 0 end
+        )
+    end
+    local sb = math.max(
+        -1,
+        math.min(1, -m[7])
+    )
+    if math.abs(sb) > 0.999999 then
+        return {
+            0,
+            degrees(
+                nil,
+                math.asin(sb)
+            ),
+            degrees(
+                nil,
+                math.atan(-m[2], m[5])
+            )
+        }
+    end
+    return {
+        degrees(
+            nil,
+            math.atan(m[8], m[9])
+        ),
+        degrees(
+            nil,
+            math.asin(sb)
+        ),
+        degrees(
+            nil,
+            math.atan(m[4], m[1])
+        )
+    }
+end
+local function times(____, m, v)
+    return {m[1] * v[1] + m[2] * v[2] + m[3] * v[3], m[4] * v[1] + m[5] * v[2] + m[6] * v[3], m[7] * v[1] + m[8] * v[2] + m[9] * v[3]}
+end
+____exports.product = function(____, a, b) return __TS__ArrayFlatMap(
+    {0, 1, 2},
+    function(____, row) return __TS__ArrayMap(
+        {0, 1, 2},
+        function(____, column) return a[row * 3 + 1] * b[column + 1] + a[row * 3 + 1 + 1] * b[3 + column + 1] + a[row * 3 + 2 + 1] * b[6 + column + 1] end
+    ) end
+) end
+function ____exports.within(self, outer, inner)
+    local moved = times(nil, outer.turn, inner.at)
+    return {
+        at = {outer.at[1] + outer.scale * moved[1], outer.at[2] + outer.scale * moved[2], outer.at[3] + outer.scale * moved[3]},
+        turn = ____exports.product(nil, outer.turn, inner.turn),
+        scale = outer.scale * inner.scale
+    }
+end
+function ____exports.placeIn(self, placement, position, rotation, scale)
+    local placed = ____exports.within(
+        nil,
+        placement,
+        {
+            at = {position[1], position[2], position[3]},
+            turn = ____exports.turnMatrix(nil, rotation),
+            scale = 1
+        }
+    )
+    return {
+        position = placed.at,
+        rotation = ____exports.turnDegrees(nil, placed.turn),
+        scale = {scale[1] * placement.scale, scale[2] * placement.scale, scale[3] * placement.scale}
+    }
+end
+function ____exports.placementOf(self, scope, block)
+    local properties = __TS__ArrayFlatMap(
+        block.entries,
+        function(____, entry) return entry.type == "layout" and entry.layout.properties or ({}) end
+    )
+    if #properties == 0 then
+        return nil
+    end
+    local kind = "a " .. block.kind
+    local function numbers(____, key)
+        local ____opt_0 = __TS__ArrayFind(
+            properties,
+            function(____, property) return property.key == key end
+        )
+        local written = ____opt_0 and ____opt_0.value
+        if not written then
+            return nil
+        end
+        local value = resolveValue(nil, scope, written)
+        if value.type == "number" then
+            return {value.value}
+        end
+        if value.type == "tuple" then
+            return value.values
+        end
+        fail(nil, scope, key .. " needs numbers")
+    end
+    for ____, ____value in ipairs(properties) do
+        local key = ____value.key
+        if key ~= "position" and key ~= "rotation" and key ~= "scale" then
+            fail(nil, scope, (("the layout of " .. kind) .. " in a Scene says its position, rotation and scale, not ") .. key)
+        end
+    end
+    local function three(____, key)
+        local found = numbers(nil, key) or ({0, 0, 0})
+        if #found ~= 3 then
+            fail(nil, scope, ((key .. " of ") .. kind) .. " in a Scene needs three numbers: x, y, z")
+        end
+        return {found[1], found[2], found[3]}
+    end
+    local scale = numbers(nil, "scale") or ({1})
+    if #scale ~= 1 or not (scale[1] > 0) then
+        fail(nil, scope, ("scale of " .. kind) .. " is one number above 0, as what it holds is made larger evenly; a Template can take a parameter for a length")
+    end
+    return {
+        at = three(nil, "position"),
+        turn = ____exports.turnMatrix(
+            nil,
+            three(nil, "rotation")
+        ),
+        scale = scale[1]
+    }
+end
+function ____exports.placedWithin(self, blocks, placement)
+    return placement and __TS__ArrayMap(
+        blocks,
+        function(____, block) return __TS__ObjectAssign(
+            {},
+            block,
+            {["local"] = block["local"] and ____exports.within(nil, placement, block["local"]) or placement}
+        ) end
+    ) or blocks
+end
+local WHOLE = __TS__New(Set, {
+    "Solid",
+    "Mesh",
+    "Facets",
+    "Terrain",
+    "Canvas"
+})
+local function hasLayout(____, block)
+    return __TS__ArraySome(
+        block.entries,
+        function(____, entry) return entry.type == "layout" end
+    )
+end
+function ____exports.hasPlacements(self, blocks, inScene)
+    if inScene == nil then
+        inScene = false
+    end
+    return __TS__ArraySome(
+        blocks,
+        function(____, block) return block["local"] ~= nil or inScene and block.kind == "Group" and hasLayout(nil, block) or ____exports.hasPlacements(
+            nil,
+            __TS__ArrayFlatMap(
+                block.entries,
+                function(____, entry) return entry.type == "block" and ({entry.block}) or ({}) end
+            ),
+            inScene or block.kind == "Scene"
+        ) end
+    )
+end
+function ____exports.withPlacements(self, blocks, outer, inScene)
+    if inScene == nil then
+        inScene = false
+    end
+    return __TS__ArrayMap(
+        blocks,
+        function(____, block)
+            local scope = {
+                vars = __TS__New(Map),
+                params = __TS__New(Map),
+                random = __TS__New(Random, 0),
+                label = (block.kind .. " ") .. block.name
+            }
+            local ____temp_2
+            if inScene and block.kind == "Group" then
+                ____temp_2 = ____exports.placementOf(nil, scope, block)
+            else
+                ____temp_2 = nil
+            end
+            local own = ____temp_2
+            local steps = __TS__ArrayFilter(
+                __compact(outer, block["local"], own),
+                function(____, step) return step ~= nil end
+            )
+            local placement = __t(nil, #steps) and __TS__ArrayReduce(
+                steps,
+                function(____, sum, step) return ____exports.within(nil, sum, step) end
+            ) or nil
+            return __TS__ObjectAssign(
+                {},
+                block,
+                placement and ({placement = placement}) or ({}),
+                {entries = WHOLE:has(block.kind) and block.entries or __TS__ArrayMap(
+                    block.entries,
+                    function(____, entry) return entry.type == "block" and ({
+                        type = "block",
+                        block = ____exports.withPlacements(nil, {entry.block}, placement, inScene or block.kind == "Scene")[1]
+                    }) or entry end
+                )}
+            )
+        end
     )
 end
 return ____exports
@@ -7319,7 +7690,7 @@ return ____exports
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
 local ____exports = {}
 local ____evaluation = require("core.sflLanguage.expansion.evaluation")
-local resolveNumeric = ____evaluation.resolveNumeric
+local resolveValue = ____evaluation.resolveValue
 local ____scope = require("core.sflLanguage.expansion.scope")
 local fail = ____scope.fail
 function ____exports.propertyOf(self, block, key)
@@ -7335,7 +7706,7 @@ function ____exports.numbersOf(self, scope, block, key)
     if not written then
         return nil
     end
-    local value = resolveNumeric(nil, scope, written)
+    local value = resolveValue(nil, scope, written)
     if value.type == "number" then
         return {value.value}
     end
@@ -7350,16 +7721,30 @@ return ____exports
 local ____lualib = require("lualib_bundle")
 local Set = ____lualib.Set
 local __TS__New = ____lualib.__TS__New
-local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
-local __TS__ArraySome = ____lualib.__TS__ArraySome
 local Map = ____lualib.Map
+local __TS__ArraySome = ____lualib.__TS__ArraySome
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayFrom = ____lualib.__TS__ArrayFrom
+local __TS__StringAccess = ____lualib.__TS__StringAccess
+local __TS__Spread = ____lualib.__TS__Spread
+local __TS__ArrayFind = ____lualib.__TS__ArrayFind
+local __TS__StringIncludes = ____lualib.__TS__StringIncludes
+local __TS__ObjectEntries = ____lualib.__TS__ObjectEntries
 local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
+local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
+local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
 local ____exports = {}
+local distance, helpersOf, RESERVED
 local ______shims = require("core.__shims")
 local __imul = ______shims.__imul
+local __json = ______shims.__json
 local __lor = ______shims.__lor
 local __sort = ______shims.__sort
+local __t = ______shims.__t
 local __xor = ______shims.__xor
 local ____evaluation = require("core.sflLanguage.expansion.evaluation")
 local evaluate = ____evaluation.evaluate
@@ -7367,6 +7752,10 @@ local resolveValue = ____evaluation.resolveValue
 local round = ____evaluation.round
 local ____instance = require("core.sflLanguage.expansion.instance")
 local instance = ____instance.instance
+local namesIn = ____instance.namesIn
+local ____placement = require("core.sflLanguage.expansion.placement")
+local placedWithin = ____placement.placedWithin
+local placementOf = ____placement.placementOf
 local ____properties = require("core.sflLanguage.expansion.properties")
 local numbersOf = ____properties.numbersOf
 local propertyOf = ____properties.propertyOf
@@ -7374,43 +7763,151 @@ local ____random = require("core.sflLanguage.expansion.random")
 local Random = ____random.Random
 local ____scope = require("core.sflLanguage.expansion.scope")
 local fail = ____scope.fail
-local RESERVED = __TS__New(Set, {
+function distance(self, a, b)
+    local row = __TS__ArrayFrom(
+        {length = #b + 1},
+        function(____, _, index) return index end
+    )
+    do
+        local i = 1
+        while i <= #a do
+            local corner = row[1]
+            row[1] = i
+            do
+                local j = 1
+                while j <= #b do
+                    local above = row[j + 1]
+                    row[j + 1] = math.min(
+                        row[j + 1] + 1,
+                        row[j] + 1,
+                        corner + (__TS__StringAccess(a, i - 1) == __TS__StringAccess(b, j - 1) and 0 or 1)
+                    )
+                    corner = above
+                    j = j + 1
+                end
+            end
+            i = i + 1
+        end
+    end
+    return row[#b + 1]
+end
+function helpersOf(self, block, scope, templates)
+    local used = __json(nil, templates)
+    return __TS__ArrayFlatMap(
+        block.entries,
+        function(____, entry)
+            if entry.type ~= "property" or RESERVED:has(entry.property.key) then
+                return {}
+            end
+            local ____entry_property_24 = entry.property
+            local key = ____entry_property_24.key
+            local meant = __TS__ArrayFind(
+                {__TS__Spread(RESERVED)},
+                function(____, word) return distance(nil, word, key) <= (#word > 4 and 2 or 1) end
+            )
+            if __t(nil, meant) and not __TS__StringIncludes(used, ("\"" .. key) .. "\"") then
+                fail(nil, scope, ((key .. " is not read by a Repeat, and no cell uses it: is it ") .. meant) .. "?")
+            end
+            return {entry.property}
+        end
+    )
+end
+RESERVED = __TS__New(Set, {
     "columns",
     "rows",
     "count",
+    "each",
     "step",
     "origin",
     "seed",
     "jitter",
     "chance",
     "order",
+    "sequence",
     "where"
 })
+local CELL_NAMES = __TS__New(Set, {
+    "col",
+    "row",
+    "index",
+    "count",
+    "columns",
+    "rows",
+    "x",
+    "y",
+    "z"
+})
+local NO_DATA = {
+    tables = __TS__New(Map),
+    sources = __TS__New(Map)
+}
 local MAX_CELLS = 20000
 local MAX_VALUES = 1000000
-local function readGrid(self, block, scope)
-    local ____opt_0 = numbersOf(nil, scope, block, "count")
-    local count = ____opt_0 and ____opt_0[1]
-    local ____count_4 = count
-    if ____count_4 == nil then
-        local ____opt_2 = numbersOf(nil, scope, block, "columns")
-        ____count_4 = ____opt_2 and ____opt_2[1]
+local function readEach(self, block, scope, data)
+    local each = propertyOf(nil, block, "each")
+    if not each then
+        return nil
     end
-    local columns = math.max(
-        1,
-        math.floor(____count_4 or 1)
-    )
-    local ____temp_7
-    if count == nil then
-        local ____opt_5 = numbersOf(nil, scope, block, "rows")
-        ____temp_7 = math.max(
+    if each.type ~= "each" then
+        fail(nil, scope, "each is written as 'each: row in table'")
+    end
+    if __TS__ArraySome(
+        {"columns", "rows", "count"},
+        function(____, key) return propertyOf(nil, block, key) end
+    ) then
+        fail(nil, scope, "each makes one cell for every row, so columns, rows and count cannot stand beside it")
+    end
+    local kind = data.sources:get(each.source)
+    if not __t(nil, kind) then
+        fail(nil, scope, ("each names " .. each.source) .. ", which is not a DataSource of this document")
+    end
+    if kind == "record" then
+        fail(nil, scope, each.source .. " is a record and has no rows to run over")
+    end
+    if CELL_NAMES:has(each.row) or scope.params:has(each.row) or data.sources:has(each.row) then
+        fail(nil, scope, ("a row cannot be called " .. each.row) .. ", as that name is taken")
+    end
+    return {
+        row = each.row,
+        rows = data.tables:get(each.source) or ({})
+    }
+end
+local function readGrid(self, block, scope, data)
+    local each = readEach(nil, block, scope, data)
+    local ____each_2
+    if each then
+        ____each_2 = #each.rows
+    else
+        local ____opt_0 = numbersOf(nil, scope, block, "count")
+        ____each_2 = ____opt_0 and ____opt_0[1]
+    end
+    local count = ____each_2
+    local ____each_6
+    if each then
+        ____each_6 = #each.rows
+    else
+        local ____count_5 = count
+        if ____count_5 == nil then
+            local ____opt_3 = numbersOf(nil, scope, block, "columns")
+            ____count_5 = ____opt_3 and ____opt_3[1]
+        end
+        ____each_6 = math.max(
             1,
-            math.floor(____opt_5 and ____opt_5[1] or 1)
+            math.floor(____count_5 or 1)
+        )
+    end
+    local columns = ____each_6
+    local ____temp_9
+    if count == nil then
+        local ____opt_7 = numbersOf(nil, scope, block, "rows")
+        ____temp_9 = math.max(
+            1,
+            math.floor(____opt_7 and ____opt_7[1] or 1)
         )
     else
-        ____temp_7 = 1
+        ____temp_9 = 1
     end
-    local rows = ____temp_7
+    local rows = ____temp_9
     if columns * rows > MAX_CELLS then
         fail(
             nil,
@@ -7440,7 +7937,7 @@ local function readGrid(self, block, scope)
     if originY == nil then
         originY = 0
     end
-    local order = propertyOf(nil, block, "order")
+    local order = propertyOf(nil, block, "sequence") or propertyOf(nil, block, "order")
     local templates = __TS__ArrayFlatMap(
         block.entries,
         function(____, entry) return entry.type == "block" and ({entry.block}) or ({}) end
@@ -7454,30 +7951,28 @@ local function readGrid(self, block, scope)
     if columns * rows * math.max(1, #templates) > MAX_VALUES then
         fail(nil, scope, "too many blocks")
     end
-    local ____columns_16 = columns
-    local ____rows_17 = rows
-    local ____temp_18 = {stepX, stepY}
-    local ____temp_19 = {originX, originY}
-    local ____opt_8 = numbersOf(nil, scope, block, "seed")
-    local ____temp_20 = ____opt_8 and ____opt_8[1] or 0
-    local ____opt_10 = numbersOf(nil, scope, block, "jitter")
-    local ____temp_21 = ____opt_10 and ____opt_10[1] or 0
-    local ____opt_12 = numbersOf(nil, scope, block, "chance")
+    local ____columns_18 = columns
+    local ____rows_19 = rows
+    local ____temp_20 = {stepX, stepY}
+    local ____temp_21 = {originX, originY}
+    local ____opt_10 = numbersOf(nil, scope, block, "seed")
+    local ____temp_22 = ____opt_10 and ____opt_10[1] or 0
+    local ____opt_12 = numbersOf(nil, scope, block, "jitter")
+    local ____temp_23 = ____opt_12 and ____opt_12[1] or 0
+    local ____opt_14 = numbersOf(nil, scope, block, "chance")
     return {
-        columns = ____columns_16,
-        rows = ____rows_17,
-        step = ____temp_18,
-        origin = ____temp_19,
-        seed = ____temp_20,
-        jitter = ____temp_21,
-        chance = ____opt_12 and ____opt_12[1] or 1,
+        columns = ____columns_18,
+        rows = ____rows_19,
+        step = ____temp_20,
+        origin = ____temp_21,
+        seed = ____temp_22,
+        jitter = ____temp_23,
+        chance = ____opt_14 and ____opt_14[1] or 1,
         diagonal = (order and order.type) == "ident" and order.segments[1] == "diagonal",
         condition = propertyOf(nil, block, "where"),
-        helpers = __TS__ArrayFlatMap(
-            block.entries,
-            function(____, entry) return entry.type == "property" and entry.property.value.type == "expr" and not RESERVED:has(entry.property.key) and ({entry.property}) or ({}) end
-        ),
-        templates = templates
+        helpers = helpersOf(nil, block, scope, templates),
+        templates = templates,
+        each = each
     }
 end
 local function cellsOf(self, grid)
@@ -7546,6 +8041,25 @@ local function enterCell(self, scope, grid, col, row)
             }
         }
     )
+    scope.vars:set(
+        "z",
+        scope.vars:get("y")
+    )
+    local ____opt_29 = grid.each
+    for ____, ____value in ipairs(__TS__ObjectEntries(____opt_29 and ____opt_29.rows[index + 1] or ({}))) do
+        local field = ____value[1]
+        local value = ____value[2]
+        if type(value) == "number" or type(value) == "string" or type(value) == "boolean" then
+            local ____self_27 = scope.vars
+            local ____self_27_set_28 = ____self_27.set
+            local ____opt_25 = grid.each
+            ____self_27_set_28(
+                ____self_27,
+                (tostring(____opt_25 and ____opt_25.row) .. ".") .. field,
+                value
+            )
+        end
+    end
     return true
 end
 local function nameHelpers(self, scope, helpers)
@@ -7554,30 +8068,55 @@ local function nameHelpers(self, scope, helpers)
         if value.type == "number" or value.type == "string" then
             scope.vars:set(helper.key, value.value)
         elseif value.type == "ident" then
-            scope.vars:set(helper.key, value.segments[1] == "true" and 1 or 0)
+            local word = table.unpack(value.segments, 1, 1)
+            scope.vars:set(
+                helper.key,
+                word == "true" and 1 or (word == "false" and 0 or table.concat(value.segments, "."))
+            )
         else
             fail(nil, scope, helper.key .. " needs a number")
         end
     end
 end
 local function keepsCell(self, scope, condition)
-    return (condition and condition.type) ~= "expr" or Boolean(
-        nil,
-        __TS__ArrayMap(
-            condition.items,
-            function(____, item) return evaluate(nil, scope, item) end
-        )[1]
-    )
+    if condition == nil then
+        return true
+    end
+    if condition.type == "expr" then
+        return Boolean(
+            nil,
+            __TS__ArrayMap(
+                condition.items,
+                function(____, item) return evaluate(nil, scope, item) end
+            )[1]
+        )
+    end
+    local value = resolveValue(nil, scope, condition)
+    if value.type == "number" then
+        return value.value ~= 0
+    end
+    if value.type == "ident" and #value.segments == 1 and (value.segments[1] == "true" or value.segments[1] == "false") then
+        return value.segments[1] == "true"
+    end
+    fail(nil, scope, "where needs true or false")
 end
-local function expandRepeat(self, block, params)
+local function expandRepeat(self, block, params, data, inScene)
     local scope = {
         vars = __TS__New(Map),
         params = params,
         random = __TS__New(Random, 0),
         label = "Repeat " .. block.name
     }
-    local grid = readGrid(nil, block, scope)
+    local ____inScene_31
+    if inScene then
+        ____inScene_31 = placementOf(nil, scope, block)
+    else
+        ____inScene_31 = nil
+    end
+    local placement = ____inScene_31
+    local grid = readGrid(nil, block, scope, data)
     local made = {}
+    local ____local = namesIn(nil, grid.templates)
     for ____, ____value in ipairs(cellsOf(nil, grid)) do
         local col = ____value[1]
         local row = ____value[2]
@@ -7589,11 +8128,11 @@ local function expandRepeat(self, block, params)
                 col,
                 row
             ) then
-                goto __continue28
+                goto __continue53
             end
             nameHelpers(nil, scope, grid.helpers)
             if not keepsCell(nil, scope, grid.condition) then
-                goto __continue28
+                goto __continue53
             end
             local suffix = grid.rows == 1 and "_" .. tostring(col) or (("_" .. tostring(col)) .. "_") .. tostring(row)
             for ____, template in ipairs(grid.templates) do
@@ -7601,23 +8140,36 @@ local function expandRepeat(self, block, params)
                     nil,
                     scope,
                     template,
-                    function(____, name) return name .. suffix end
+                    function(____, name) return name .. suffix end,
+                    ____local
                 )
             end
         end
-        ::__continue28::
+        ::__continue53::
     end
-    return made
+    return placedWithin(nil, made, placement)
 end
-function ____exports.expandRepeatBlocks(self, blocks, params)
+function ____exports.expandRepeatBlocks(self, blocks, params, data, inScene)
     if params == nil then
         params = __TS__New(Map)
+    end
+    if data == nil then
+        data = NO_DATA
+    end
+    if inScene == nil then
+        inScene = false
     end
     return __TS__ArrayFlatMap(
         blocks,
         function(____, block)
             if block.kind == "Repeat" then
-                return expandRepeat(nil, block, params)
+                return expandRepeat(
+                    nil,
+                    block,
+                    params,
+                    data,
+                    inScene
+                )
             end
             if block.kind == "Template" or not __TS__ArraySome(
                 block.entries,
@@ -7631,7 +8183,13 @@ function ____exports.expandRepeatBlocks(self, blocks, params)
                 {entries = __TS__ArrayFlatMap(
                     block.entries,
                     function(____, entry) return entry.type == "block" and __TS__ArrayMap(
-                        ____exports.expandRepeatBlocks(nil, {entry.block}, params),
+                        ____exports.expandRepeatBlocks(
+                            nil,
+                            {entry.block},
+                            params,
+                            data,
+                            inScene or block.kind == "Scene"
+                        ),
                         function(____, child) return {type = "block", block = child} end
                     ) or ({entry}) end
                 )}
@@ -7646,6 +8204,57 @@ function ____exports.hasRepeats(self, blocks)
             block.entries,
             function(____, entry) return entry.type == "block" and ____exports.hasRepeats(nil, {entry.block}) end
         ) end
+    )
+end
+function ____exports.eachSources(self, blocks)
+    local names = __TS__New(Set)
+    local visit
+    visit = function(____, block)
+        for ____, entry in ipairs(block.entries) do
+            if entry.type == "block" then
+                visit(nil, entry.block)
+            elseif block.kind == "Repeat" and entry.type == "property" and entry.property.value.type == "each" then
+                names:add(entry.property.value.source)
+            end
+        end
+    end
+    __TS__ArrayForEach(blocks, visit)
+    return names
+end
+function ____exports.repeatNotes(self, blocks, inScene)
+    if inScene == nil then
+        inScene = false
+    end
+    return __TS__ArrayFlatMap(
+        blocks,
+        function(____, block)
+            local own = {}
+            if block.kind == "Repeat" then
+                if propertyOf(nil, block, "order") then
+                    own[#own + 1] = {code = "repeat-order", owner = block.name, message = ("Repeat '" .. block.name) .. "': order is written sequence now, as order is the stacking of a layout. It is still read."}
+                end
+                local cells = __json(
+                    nil,
+                    __TS__ArrayFilter(
+                        block.entries,
+                        function(____, entry) return entry.type == "block" end
+                    )
+                )
+                if inScene and __TS__StringIncludes(cells, "\"path\":[\"y\"]") then
+                    own[#own + 1] = {code = "repeat-y-in-scene", owner = block.name, message = ("Repeat '" .. block.name) .. "' lies in a Scene, where y is up: its rows are named z there. y is still read."}
+                end
+            end
+            local children = __TS__ArrayFlatMap(
+                block.entries,
+                function(____, entry) return entry.type == "block" and ({entry.block}) or ({}) end
+            )
+            local ____array_32 = __TS__SparseArrayNew(table.unpack(own))
+            __TS__SparseArrayPush(
+                ____array_32,
+                table.unpack(____exports.repeatNotes(nil, children, inScene or block.kind == "Scene"))
+            )
+            return {__TS__SparseArraySpread(____array_32)}
+        end
     )
 end
 return ____exports
@@ -7675,9 +8284,14 @@ local __imul = ______shims.__imul
 local __shr = ______shims.__shr
 local __xor = ______shims.__xor
 local ____evaluation = require("core.sflLanguage.expansion.evaluation")
-local resolveNumeric = ____evaluation.resolveNumeric
+local resolveValue = ____evaluation.resolveValue
 local ____instance = require("core.sflLanguage.expansion.instance")
 local instance = ____instance.instance
+local namesIn = ____instance.namesIn
+local ____placement = require("core.sflLanguage.expansion.placement")
+local placedWithin = ____placement.placedWithin
+local placementOf = ____placement.placementOf
+local within = ____placement.within
 local ____properties = require("core.sflLanguage.expansion.properties")
 local numbersOf = ____properties.numbersOf
 local ____random = require("core.sflLanguage.expansion.random")
@@ -7708,8 +8322,7 @@ function expandUse(self, use, templates, depth, budget, params)
         vars = __TS__New(Map),
         params = params,
         random = __TS__New(Random, 0),
-        label = "Use " .. use.name,
-        substitute = true
+        label = "Use " .. use.name
     }
     if depth > MAX_DEPTH then
         fail(
@@ -7748,6 +8361,8 @@ function expandUse(self, use, templates, depth, budget, params)
     end
     scope.vars:set("x", x)
     scope.vars:set("y", y)
+    local own = placementOf(nil, scope, use)
+    local placement = use["local"] and own and within(nil, use["local"], own) or (use["local"] or own)
     local given = __TS__New(
         Map,
         __TS__ArrayFlatMap(
@@ -7766,7 +8381,7 @@ function expandUse(self, use, templates, depth, budget, params)
             if PLACE:has(key) or OWN:has(key) then
                 fail(nil, scope, key .. " is the name of something a Use sets, so it cannot be a parameter")
             end
-            local chosen = resolveNumeric(
+            local chosen = resolveValue(
                 nil,
                 scope,
                 given:get(key) or value
@@ -7789,17 +8404,23 @@ function expandUse(self, use, templates, depth, budget, params)
     if unknown ~= nil then
         fail(nil, scope, (("Template " .. template.name) .. " has no parameter ") .. unknown)
     end
-    local made = __TS__ArrayFlatMap(
+    local parts = __TS__ArrayFlatMap(
         template.entries,
-        function(____, entry) return entry.type == "block" and ({instance(
+        function(____, entry) return entry.type == "block" and ({entry.block}) or ({}) end
+    )
+    local ____local = namesIn(nil, parts)
+    local made = __TS__ArrayMap(
+        parts,
+        function(____, part) return instance(
             nil,
             scope,
-            entry.block,
-            function(____, name) return (use.name .. "_") .. name end
-        )}) or ({}) end
+            part,
+            function(____, name) return (use.name .. "_") .. name end,
+            ____local
+        ) end
     )
     budget:take(#made, scope)
-    return expandIn(
+    local expanded = expandIn(
         nil,
         made,
         templates,
@@ -7807,6 +8428,7 @@ function expandUse(self, use, templates, depth, budget, params)
         budget,
         params
     )
+    return placedWithin(nil, expanded, placement)
 end
 function expandIn(self, blocks, templates, depth, budget, params)
     return __TS__ArrayFlatMap(
@@ -7940,24 +8562,32 @@ local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local Map = ____lualib.Map
 local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayFind = ____lualib.__TS__ArrayFind
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
 local ____exports = {}
+local checkNoComputed, parameterBlocks, withoutParameters, readParameters, resolveWithParameters, dataSources, expandCopies, isComputed
+local ______shims = require("core.__shims")
+local __t = ______shims.__t
 local ____evaluation = require("core.sflLanguage.expansion.evaluation")
-local resolveNumeric = ____evaluation.resolveNumeric
+local resolveValue = ____evaluation.resolveValue
 local ____instance = require("core.sflLanguage.expansion.instance")
 local instance = ____instance.instance
+local ____placement = require("core.sflLanguage.expansion.placement")
+local hasPlacements = ____placement.hasPlacements
+local withPlacements = ____placement.withPlacements
 local ____random = require("core.sflLanguage.expansion.random")
 local Random = ____random.Random
 local ____repeat = require("core.sflLanguage.expansion.repeat")
 local expandRepeatBlocks = ____repeat.expandRepeatBlocks
 local hasRepeats = ____repeat.hasRepeats
+local repeatNotes = ____repeat.repeatNotes
 local ____scope = require("core.sflLanguage.expansion.scope")
 local fail = ____scope.fail
 local ____template = require("core.sflLanguage.expansion.template")
 local expandUses = ____template.expandUses
 local hasTemplates = ____template.hasTemplates
-local isComputed
-isComputed = function(____, value) return value.type == "expr" or value.type == "list" and __TS__ArraySome(value.values, isComputed) end
-local function checkNoComputed(self, blocks)
+function checkNoComputed(self, blocks)
     for ____, block in ipairs(blocks) do
         for ____, entry in ipairs(block.entries) do
             local properties = entry.type == "property" and ({entry.property}) or (entry.type == "layout" and entry.layout.properties or (entry.type == "style" and entry.style.properties or ({})))
@@ -7975,7 +8605,7 @@ local function checkNoComputed(self, blocks)
         end
     end
 end
-local function parameterBlocks(self, blocks)
+function parameterBlocks(self, blocks)
     return __TS__ArrayFlatMap(
         blocks,
         function(____, block)
@@ -7994,7 +8624,7 @@ local function parameterBlocks(self, blocks)
         end
     )
 end
-local function withoutParameters(self, blocks)
+function withoutParameters(self, blocks)
     return __TS__ArrayFlatMap(
         blocks,
         function(____, block) return block.kind == "Parameters" and ({}) or ({__TS__ObjectAssign(
@@ -8010,7 +8640,7 @@ local function withoutParameters(self, blocks)
         )}) end
     )
 end
-local function readParameters(self, blocks)
+function readParameters(self, blocks)
     local params = __TS__New(Map)
     for ____, block in ipairs(parameterBlocks(nil, blocks)) do
         local scope = {
@@ -8023,7 +8653,7 @@ local function readParameters(self, blocks)
             if entry.type ~= "property" then
                 fail(nil, scope, "Parameters hold only properties")
             end
-            local value = resolveNumeric(nil, scope, entry.property.value)
+            local value = resolveValue(nil, scope, entry.property.value)
             if value.type == "number" or value.type == "string" then
                 params:set(entry.property.key, value.value)
             elseif value.type == "ident" then
@@ -8038,7 +8668,7 @@ local function readParameters(self, blocks)
     end
     return params
 end
-local function resolveWithParameters(self, blocks, params)
+function resolveWithParameters(self, blocks, params)
     return __TS__ArrayMap(
         blocks,
         function(____, block) return instance(
@@ -8054,7 +8684,28 @@ local function resolveWithParameters(self, blocks, params)
         ) end
     )
 end
-function ____exports.expandDocument(self, doc)
+function dataSources(self, blocks)
+    local found = __TS__New(Map)
+    local visit
+    visit = function(____, block)
+        if block.kind == "DataSource" then
+            local mode = __TS__ArrayFind(
+                block.entries,
+                function(____, entry) return entry.type == "property" and entry.property.key == "mode" end
+            )
+            local record = (mode and mode.type) == "property" and mode.property.value.type == "ident" and mode.property.value.segments[1] == "record"
+            found:set(block.name, record and "record" or "table")
+        end
+        for ____, entry in ipairs(block.entries) do
+            if entry.type == "block" then
+                visit(nil, entry.block)
+            end
+        end
+    end
+    __TS__ArrayForEach(blocks, visit)
+    return found
+end
+function expandCopies(self, doc, tables)
     local params = readParameters(nil, doc.blocks)
     local repeats = hasRepeats(nil, doc.blocks)
     if not repeats and not hasTemplates(nil, doc.blocks) and params.size == 0 and #parameterBlocks(nil, doc.blocks) == 0 then
@@ -8062,14 +8713,93 @@ function ____exports.expandDocument(self, doc)
         return doc
     end
     local source = withoutParameters(nil, doc.blocks)
+    local data = {
+        tables = tables,
+        sources = dataSources(nil, doc.blocks)
+    }
     local expanded = expandUses(
         nil,
-        repeats and expandRepeatBlocks(nil, source, params) or source,
+        repeats and expandRepeatBlocks(nil, source, params, data) or source,
         params
     )
     local blocks = params.size > 0 and resolveWithParameters(nil, expanded, params) or expanded
     checkNoComputed(nil, blocks)
     return __TS__ObjectAssign({}, doc, {blocks = blocks})
+end
+isComputed = function(____, value) return value.type == "expr" or value.type == "list" and __TS__ArraySome(value.values, isComputed) end
+local function withMirrors(self, blocks)
+    return __TS__ArrayFlatMap(
+        blocks,
+        function(____, block)
+            local inner = __TS__ObjectAssign(
+                {},
+                block,
+                {entries = __TS__ArrayFlatMap(
+                    block.entries,
+                    function(____, entry) return entry.type == "block" and __TS__ArrayMap(
+                        withMirrors(nil, {entry.block}),
+                        function(____, child) return {type = "block", block = child} end
+                    ) or ({entry}) end
+                )}
+            )
+            local mirror = block.kind == "Solid" and __TS__ArrayFind(
+                block.entries,
+                function(____, entry) return entry.type == "property" and entry.property.key == "mirror" end
+            )
+            if not mirror or mirror.type ~= "property" then
+                return {inner}
+            end
+            local plane = mirror.property.value
+            local twin = __TS__ObjectAssign(
+                {},
+                inner,
+                {
+                    name = block.name .. "_mirror",
+                    entries = __TS__ArrayFilter(
+                        inner.entries,
+                        function(____, entry) return entry ~= mirror end
+                    )
+                },
+                plane.type == "ident" and ({mirrored = table.concat(plane.segments, ".")}) or (plane.type == "string" and ({mirrored = plane.value}) or ({}))
+            )
+            return {inner, twin}
+        end
+    )
+end
+local hasMirrors
+hasMirrors = function(____, blocks) return __TS__ArraySome(
+    blocks,
+    function(____, block) return block.kind == "Solid" and __TS__ArraySome(
+        block.entries,
+        function(____, entry) return entry.type == "property" and entry.property.key == "mirror" end
+    ) or hasMirrors(
+        nil,
+        __TS__ArrayFlatMap(
+            block.entries,
+            function(____, entry) return entry.type == "block" and ({entry.block}) or ({}) end
+        )
+    ) end
+) end
+function ____exports.expandDocument(self, doc, tables)
+    if tables == nil then
+        tables = __TS__New(Map)
+    end
+    local notes = repeatNotes(nil, doc.blocks)
+    local expanded = __TS__ObjectAssign(
+        {},
+        expandCopies(nil, doc, tables),
+        __t(nil, #notes) and ({notes = notes}) or ({})
+    )
+    local mirrored = hasMirrors(nil, expanded.blocks) and __TS__ObjectAssign(
+        {},
+        expanded,
+        {blocks = withMirrors(nil, expanded.blocks)}
+    ) or expanded
+    return hasPlacements(nil, mirrored.blocks) and __TS__ObjectAssign(
+        {},
+        mirrored,
+        {blocks = withPlacements(nil, mirrored.blocks)}
+    ) or mirrored
 end
 return ____exports
  end,
@@ -8128,6 +8858,10 @@ end
 do
     local ____parameterValues = require("core.sflLanguage.expansion.parameterValues")
     ____exports.withParameterValues = ____parameterValues.withParameterValues
+end
+do
+    local ____repeat = require("core.sflLanguage.expansion.repeat")
+    ____exports.eachSources = ____repeat.eachSources
 end
 return ____exports
  end,
@@ -8749,10 +9483,13 @@ local NUMBERS = {
     "opacity",
     "roughness",
     "metallic",
+    "transmission",
+    "ior",
     "turn",
     "height",
     "intensity",
-    "ambient"
+    "ambient",
+    "softness"
 }
 local AXES = {
     positionX = {"position", 0},
@@ -8765,7 +9502,8 @@ local AXES = {
     scaleY = {"scale", 1},
     scaleZ = {"scale", 2}
 }
-function ____exports.setMeshValue(self, mesh, property, value)
+function ____exports.setMeshValue(self, mesh, written, value)
+    local property = written == "elevation" and "height" or written
     local axis = AXES[property]
     local number = __TS__ArrayFind(
         NUMBERS,
@@ -8995,6 +9733,17 @@ local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
 local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
 local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
 local ____exports = {}
+function ____exports.layoutProperties(self, block)
+    local properties = __TS__New(Map)
+    for ____, entry in ipairs(block.entries) do
+        if entry.type == "layout" then
+            for ____, property in ipairs(entry.layout.properties) do
+                properties:set(property.key, property.value)
+            end
+        end
+    end
+    return properties
+end
 function ____exports.directProperties(self, block)
     local properties = __TS__New(Map)
     for ____, entry in ipairs(block.entries) do
@@ -9015,16 +9764,11 @@ function ____exports.styleProperties(self, block)
     end
     return properties
 end
-function ____exports.layoutProperties(self, block)
-    local properties = __TS__New(Map)
-    for ____, entry in ipairs(block.entries) do
-        if entry.type == "layout" then
-            for ____, property in ipairs(entry.layout.properties) do
-                properties:set(property.key, property.value)
-            end
-        end
+function ____exports.placementValue(self, block, key, before)
+    if before == nil then
+        before = key
     end
-    return properties
+    return ____exports.layoutProperties(nil, block):get(key) or ____exports.directProperties(nil, block):get(before)
 end
 function ____exports.childBlocks(self, block)
     return __TS__ArrayFlatMap(
@@ -10092,6 +10836,3110 @@ function ____exports.resolveIsometricObject(self, base, block, properties, layou
 end
 return ____exports
  end,
+["core.model.facets.index"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__NumberIsInteger = ____lualib.__TS__NumberIsInteger
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayReverse = ____lualib.__TS__ArrayReverse
+local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
+local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
+local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
+local __TS__ArrayReduce = ____lualib.__TS__ArrayReduce
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local __TS__ArraySome = ____lualib.__TS__ArraySome
+local __TS__ArraySplice = ____lualib.__TS__ArraySplice
+local __TS__ArrayEvery = ____lualib.__TS__ArrayEvery
+local __TS__ArrayPush = ____lualib.__TS__ArrayPush
+local Map = ____lualib.Map
+local __TS__StringStartsWith = ____lualib.__TS__StringStartsWith
+local __TS__StringSlice = ____lualib.__TS__StringSlice
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __hypot = ______shims.__hypot
+local __json = ______shims.__json
+local __jsonParse = ______shims.__jsonParse
+local __t = ______shims.__t
+local function sub(____, a, b)
+    return {a[1] - b[1], a[2] - b[2], a[3] - b[3]}
+end
+local function add(____, a, b)
+    return {a[1] + b[1], a[2] + b[2], a[3] + b[3]}
+end
+local function times(____, a, k)
+    return {a[1] * k, a[2] * k, a[3] * k}
+end
+local function dot(____, a, b)
+    return a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
+end
+local function cross(____, a, b)
+    return {a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1]}
+end
+local function unit(____, a)
+    local length = __hypot(nil, a[1], a[2], a[3])
+    return length > 1e-12 and ({a[1] / length, a[2] / length, a[3] / length}) or ({0, 0, 0})
+end
+local function normalOf(self, points, face)
+    local n = {0, 0, 0}
+    do
+        local i = 0
+        while i < #face do
+            local p, q = points[face[i + 1] + 1], points[face[(i + 1) % #face + 1] + 1]
+            n[1] = n[1] + (p[2] - q[2]) * (p[3] + q[3])
+            n[2] = n[2] + (p[3] - q[3]) * (p[1] + q[1])
+            n[3] = n[3] + (p[1] - q[1]) * (p[2] + q[2])
+            i = i + 1
+        end
+    end
+    return unit(nil, n)
+end
+local function whole(self, sheet)
+    local count = #sheet.points
+    local faces = __TS__ArrayFilter(
+        __TS__ArrayMap(
+            sheet.faces,
+            function(____, face) return __TS__ArrayFilter(
+                face,
+                function(____, at, i) return __TS__NumberIsInteger(at) and at >= 0 and at < count and at ~= face[(i + 1) % #face + 1] end
+            ) end
+        ),
+        function(____, face) return #face >= 3 end
+    )
+    return {points = sheet.points, faces = faces}
+end
+local function withOtherHalf(self, sheet, axis)
+    local points = {table.unpack(sheet.points)}
+    local twin = __TS__ArrayMap(
+        sheet.points,
+        function(____, point, i)
+            if math.abs(point[axis + 1]) < 0.000001 then
+                return i
+            end
+            local mirrored = {point[1], point[2], point[3]}
+            mirrored[axis + 1] = -mirrored[axis + 1]
+            points[#points + 1] = mirrored
+            return #points - 1
+        end
+    )
+    local ____array_0 = __TS__SparseArrayNew(table.unpack(sheet.faces))
+    __TS__SparseArrayPush(
+        ____array_0,
+        table.unpack(__TS__ArrayMap(
+            sheet.faces,
+            function(____, face) return __TS__ArrayReverse(__TS__ArrayMap(
+                face,
+                function(____, at) return twin[at + 1] end
+            )) end
+        ))
+    )
+    local faces = {__TS__SparseArraySpread(____array_0)}
+    return {points = points, faces = faces}
+end
+local function key(____, a, b)
+    return a * 1048576 + b
+end
+local function thick(self, sheet, thickness)
+    local count = #sheet.points
+    local normals = __TS__ArrayMap(
+        sheet.faces,
+        function(____, face) return normalOf(nil, sheet.points, face) end
+    )
+    local around = __TS__ArrayMap(
+        sheet.points,
+        function() return {} end
+    )
+    __TS__ArrayForEach(
+        sheet.faces,
+        function(____, face, f)
+            for ____, at in ipairs(face) do
+                local ____around_index_1 = around[at + 1]
+                ____around_index_1[#____around_index_1 + 1] = normals[f + 1]
+            end
+        end
+    )
+    local inner = __TS__ArrayMap(
+        sheet.points,
+        function(____, point, i)
+            local way = unit(
+                nil,
+                __TS__ArrayReduce(
+                    around[i + 1],
+                    function(____, sum, n) return add(nil, sum, n) end,
+                    {0, 0, 0}
+                )
+            )
+            local least = math.min(
+                1,
+                table.unpack(__TS__ArrayMap(
+                    around[i + 1],
+                    function(____, n) return dot(nil, way, n) end
+                ))
+            )
+            return sub(
+                nil,
+                point,
+                times(
+                    nil,
+                    way,
+                    thickness / math.max(0.35, least)
+                )
+            )
+        end
+    )
+    local taken = __TS__New(Set)
+    for ____, face in ipairs(sheet.faces) do
+        __TS__ArrayForEach(
+            face,
+            function(____, a, i)
+                taken:add(key(nil, a, face[(i + 1) % #face + 1]))
+            end
+        )
+    end
+    local ____array_2 = __TS__SparseArrayNew(table.unpack(sheet.faces))
+    __TS__SparseArrayPush(
+        ____array_2,
+        table.unpack(__TS__ArrayMap(
+            sheet.faces,
+            function(____, face) return __TS__ArrayReverse(__TS__ArrayMap(
+                face,
+                function(____, at) return at + count end
+            )) end
+        ))
+    )
+    local faces = {__TS__SparseArraySpread(____array_2)}
+    for ____, face in ipairs(sheet.faces) do
+        __TS__ArrayForEach(
+            face,
+            function(____, a, i)
+                local b = face[(i + 1) % #face + 1]
+                if not taken:has(key(nil, b, a)) then
+                    faces[#faces + 1] = {b, a, a + count, b + count}
+                end
+            end
+        )
+    end
+    local ____array_3 = __TS__SparseArrayNew(table.unpack(sheet.points))
+    __TS__SparseArrayPush(
+        ____array_3,
+        table.unpack(inner)
+    )
+    return {
+        points = {__TS__SparseArraySpread(____array_3)},
+        faces = faces
+    }
+end
+local function ears(self, corners, normal)
+    local rest = __TS__ArrayMap(
+        corners,
+        function(____, _, i) return i end
+    )
+    local triangles = {}
+    local function turns(____, a, b, c)
+        return dot(
+            nil,
+            cross(
+                nil,
+                sub(nil, corners[b + 1], corners[a + 1]),
+                sub(nil, corners[c + 1], corners[b + 1])
+            ),
+            normal
+        )
+    end
+    local guard = #corners * #corners + 8
+    while #rest > 3 and guard > 0 do
+        guard = guard - 1
+        local cut = false
+        do
+            local i = 0
+            while i < #rest do
+                do
+                    local a, b, c = rest[(i + #rest - 1) % #rest + 1], rest[i + 1], rest[(i + 1) % #rest + 1]
+                    if turns(nil, a, b, c) <= 1e-14 then
+                        goto __continue44
+                    end
+                    local blocked = __TS__ArraySome(
+                        rest,
+                        function(____, p) return p ~= a and p ~= b and p ~= c and turns(nil, a, b, p) > 0 and turns(nil, b, c, p) > 0 and turns(nil, c, a, p) > 0 end
+                    )
+                    if blocked then
+                        goto __continue44
+                    end
+                    triangles[#triangles + 1] = {a, b, c}
+                    __TS__ArraySplice(rest, i, 1)
+                    cut = true
+                    break
+                end
+                ::__continue44::
+                i = i + 1
+            end
+        end
+        if not cut then
+            __TS__ArraySplice(rest, 0, 1)
+        end
+    end
+    if #rest == 3 then
+        triangles[#triangles + 1] = {rest[1], rest[2], rest[3]}
+    end
+    return triangles
+end
+function ____exports.buildFacets(self, shape)
+    local sheet = whole(nil, {points = shape.points, faces = shape.faces})
+    if __t(nil, shape.symmetry) then
+        sheet = withOtherHalf(nil, sheet, shape.symmetry == "x" and 0 or (shape.symmetry == "y" and 1 or 2))
+    end
+    if __t(nil, shape.thickness) and shape.thickness > 0 then
+        sheet = thick(nil, sheet, shape.thickness)
+    end
+    local ____sheet_4 = sheet
+    local points = ____sheet_4.points
+    local faces = ____sheet_4.faces
+    local normals = __TS__ArrayMap(
+        faces,
+        function(____, face) return normalOf(nil, points, face) end
+    )
+    local wanted = math.max(0, shape.bevel or 0)
+    local drawn = __TS__ArrayMap(
+        faces,
+        function(____, face, f)
+            local corners = __TS__ArrayMap(
+                face,
+                function(____, at) return points[at + 1] end
+            )
+            local n = normals[f + 1]
+            local shortest = math.min(table.unpack(__TS__ArrayMap(
+                corners,
+                function(____, p, i) return __hypot(
+                    nil,
+                    table.unpack(sub(nil, corners[(i + 1) % #corners + 1], p))
+                ) end
+            )))
+            local round = __TS__ArrayReduce(
+                corners,
+                function(____, sum, p, i) return sum + __hypot(
+                    nil,
+                    table.unpack(sub(nil, corners[(i + 1) % #corners + 1], p))
+                ) end,
+                0
+            )
+            local area = __hypot(
+                nil,
+                table.unpack(__TS__ArrayReduce(
+                    corners,
+                    function(____, sum, p, i) return add(
+                        nil,
+                        sum,
+                        cross(nil, p, corners[(i + 1) % #corners + 1])
+                    ) end,
+                    {0, 0, 0}
+                ))
+            ) / 2
+            local band = math.min(wanted, shortest * 0.3, round > 0 and 2 * area / round * 0.35 or 0)
+            do
+                local step = 0
+                while step < 6 and band > 0.000001 do
+                    local width = band
+                    local inside = __TS__ArrayMap(
+                        corners,
+                        function(____, point, i)
+                            local before = corners[(i + #corners - 1) % #corners + 1]
+                            local after = corners[(i + 1) % #corners + 1]
+                            local in1, in2 = cross(
+                                nil,
+                                n,
+                                unit(
+                                    nil,
+                                    sub(nil, point, before)
+                                )
+                            ), cross(
+                                nil,
+                                n,
+                                unit(
+                                    nil,
+                                    sub(nil, after, point)
+                                )
+                            )
+                            local reach = 1 / math.max(
+                                0.25,
+                                1 + dot(nil, in1, in2)
+                            )
+                            return add(
+                                nil,
+                                point,
+                                times(
+                                    nil,
+                                    add(nil, in1, in2),
+                                    width * reach
+                                )
+                            )
+                        end
+                    )
+                    local kept = __TS__ArrayEvery(
+                        corners,
+                        function(____, point, i)
+                            local j = (i + 1) % #corners
+                            local was, now = sub(nil, corners[j + 1], point), sub(nil, inside[j + 1], inside[i + 1])
+                            return dot(nil, was, now) > dot(nil, was, was) * 0.05
+                        end
+                    )
+                    if kept then
+                        return inside
+                    end
+                    band = band / 2
+                    step = step + 1
+                end
+            end
+            return corners
+        end
+    )
+    local positions = {}
+    local facing = {}
+    local function triangle(____, a, b, c, na, nb, nc)
+        local size = cross(
+            nil,
+            sub(nil, b, a),
+            sub(nil, c, a)
+        )
+        if __hypot(nil, size[1], size[2], size[3]) < 1e-12 then
+            return
+        end
+        local ____array_5 = __TS__SparseArrayNew(table.unpack(a))
+        __TS__SparseArrayPush(
+            ____array_5,
+            table.unpack(b)
+        )
+        __TS__SparseArrayPush(
+            ____array_5,
+            table.unpack(c)
+        )
+        __TS__ArrayPush(
+            positions,
+            __TS__SparseArraySpread(____array_5)
+        )
+        local ____array_6 = __TS__SparseArrayNew(table.unpack(na))
+        __TS__SparseArrayPush(
+            ____array_6,
+            table.unpack(nb)
+        )
+        __TS__SparseArrayPush(
+            ____array_6,
+            table.unpack(nc)
+        )
+        __TS__ArrayPush(
+            facing,
+            __TS__SparseArraySpread(____array_6)
+        )
+    end
+    __TS__ArrayForEach(
+        faces,
+        function(____, _, f)
+            for ____, ____value in ipairs(ears(nil, drawn[f + 1], normals[f + 1])) do
+                local a = ____value[1]
+                local b = ____value[2]
+                local c = ____value[3]
+                triangle(
+                    nil,
+                    drawn[f + 1][a + 1],
+                    drawn[f + 1][b + 1],
+                    drawn[f + 1][c + 1],
+                    normals[f + 1],
+                    normals[f + 1],
+                    normals[f + 1]
+                )
+            end
+        end
+    )
+    if wanted <= 0 then
+        return {
+            positions = __TS__New(Float32Array, positions),
+            normals = __TS__New(Float32Array, facing)
+        }
+    end
+    local edges = __TS__New(Map)
+    __TS__ArrayForEach(
+        faces,
+        function(____, face, f)
+            __TS__ArrayForEach(
+                face,
+                function(____, a, i)
+                    edges:set(
+                        key(nil, a, face[(i + 1) % #face + 1]),
+                        {f, i}
+                    )
+                end
+            )
+        end
+    )
+    __TS__ArrayForEach(
+        faces,
+        function(____, face, f)
+            __TS__ArrayForEach(
+                face,
+                function(____, a, i)
+                    local j = (i + 1) % #face
+                    local b = face[j + 1]
+                    local other = edges:get(key(nil, b, a))
+                    if not other or a > b then
+                        return
+                    end
+                    local g, k = table.unpack(other, 1, 2)
+                    local l = (k + 1) % #faces[g + 1]
+                    local fb, fa, ga, gb = drawn[f + 1][j + 1], drawn[f + 1][i + 1], drawn[g + 1][l + 1], drawn[g + 1][k + 1]
+                    triangle(
+                        nil,
+                        fb,
+                        fa,
+                        ga,
+                        normals[f + 1],
+                        normals[f + 1],
+                        normals[g + 1]
+                    )
+                    triangle(
+                        nil,
+                        fb,
+                        ga,
+                        gb,
+                        normals[f + 1],
+                        normals[g + 1],
+                        normals[g + 1]
+                    )
+                end
+            )
+        end
+    )
+    local done = __TS__New(Set)
+    __TS__ArrayForEach(
+        faces,
+        function(____, face, f)
+            __TS__ArrayForEach(
+                face,
+                function(____, at, i)
+                    if done:has(at) then
+                        return
+                    end
+                    done:add(at)
+                    local ring = {}
+                    local g, k = f, i
+                    do
+                        local guard = 0
+                        while guard < 64 do
+                            ring[#ring + 1] = {g, k}
+                            local next = edges:get(key(nil, faces[g + 1][(k + 1) % #faces[g + 1] + 1], at))
+                            if not next then
+                                return
+                            end
+                            g, k = next[1], (next[2] + 1) % #faces[next[1] + 1]
+                            if g == f and k == i then
+                                break
+                            end
+                            guard = guard + 1
+                        end
+                    end
+                    if #ring < 3 then
+                        return
+                    end
+                    local corners = __TS__ArrayMap(
+                        ring,
+                        function(____, ____bindingPattern0)
+                            local corner
+                            local face
+                            face = ____bindingPattern0[1]
+                            corner = ____bindingPattern0[2]
+                            return drawn[face + 1][corner + 1]
+                        end
+                    )
+                    local ways = __TS__ArrayMap(
+                        ring,
+                        function(____, ____bindingPattern0)
+                            local face
+                            face = ____bindingPattern0[1]
+                            return normals[face + 1]
+                        end
+                    )
+                    local mean = unit(
+                        nil,
+                        __TS__ArrayReduce(
+                            ways,
+                            function(____, sum, n) return add(nil, sum, n) end,
+                            {0, 0, 0}
+                        )
+                    )
+                    local middle = times(
+                        nil,
+                        __TS__ArrayReduce(
+                            corners,
+                            function(____, sum, p) return add(nil, sum, p) end,
+                            {0, 0, 0}
+                        ),
+                        1 / #corners
+                    )
+                    do
+                        local c = 0
+                        while c < #corners do
+                            local d = (c + 1) % #corners
+                            local out = dot(
+                                nil,
+                                cross(
+                                    nil,
+                                    sub(nil, corners[c + 1], middle),
+                                    sub(nil, corners[d + 1], middle)
+                                ),
+                                mean
+                            ) >= 0
+                            if out then
+                                triangle(
+                                    nil,
+                                    middle,
+                                    corners[c + 1],
+                                    corners[d + 1],
+                                    mean,
+                                    ways[c + 1],
+                                    ways[d + 1]
+                                )
+                            else
+                                triangle(
+                                    nil,
+                                    middle,
+                                    corners[d + 1],
+                                    corners[c + 1],
+                                    mean,
+                                    ways[d + 1],
+                                    ways[c + 1]
+                                )
+                            end
+                            c = c + 1
+                        end
+                    end
+                end
+            )
+        end
+    )
+    return {
+        positions = __TS__New(Float32Array, positions),
+        normals = __TS__New(Float32Array, facing)
+    }
+end
+____exports.FACETS_ASSET = "facets:"
+____exports.facetsAssetName = function(____, shape) return ____exports.FACETS_ASSET .. __json(nil, shape) end
+function ____exports.facetsOfAsset(self, asset)
+    if not __TS__StringStartsWith(asset, ____exports.FACETS_ASSET) then
+        return nil
+    end
+    do
+        local function ____catch()
+            return true, nil
+        end
+        local ____try, ____hasReturned, ____returnValue = pcall(function()
+            return true, __jsonParse(
+                nil,
+                __TS__StringSlice(asset, #____exports.FACETS_ASSET)
+            )
+        end)
+        if not ____try then
+            ____hasReturned, ____returnValue = ____catch()
+        end
+        if ____hasReturned then
+            return ____returnValue
+        end
+    end
+end
+return ____exports
+ end,
+["core.model.outline.index"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
+local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
+local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
+local Map = ____lualib.Map
+local __TS__New = ____lualib.__TS__New
+local __TS__Iterator = ____lualib.__TS__Iterator
+local __TS__Spread = ____lualib.__TS__Spread
+local ____exports = {}
+local withoutStraightPoints
+local ______shims = require("core.__shims")
+local __hypot = ______shims.__hypot
+local __sort = ______shims.__sort
+function withoutStraightPoints(self, ring)
+    return __TS__ArrayFilter(
+        ring,
+        function(____, point, i)
+            local before = ring[(i + #ring - 1) % #ring + 1]
+            local after = ring[(i + 1) % #ring + 1]
+            return math.abs((point[1] - before[1]) * (after[2] - before[2]) - (point[2] - before[2]) * (after[1] - before[1])) > 1e-9
+        end
+    )
+end
+local TINY = 1e-9
+local function key(____, x, y)
+    return (tostring(math.floor(x * 10000000 + 0.5)) .. ",") .. tostring(math.floor(y * 10000000 + 0.5))
+end
+function ____exports.ringArea(self, ring)
+    local sum = 0
+    do
+        local i = 0
+        while i < #ring do
+            local x1, y1 = table.unpack(ring[i + 1], 1, 2)
+            local x2, y2 = table.unpack(ring[(i + 1) % #ring + 1], 1, 2)
+            sum = sum + (x1 * y2 - x2 * y1)
+            i = i + 1
+        end
+    end
+    return sum / 2
+end
+function ____exports.insideOutline(self, outline, x, y)
+    local inside = false
+    for ____, ring in ipairs(outline) do
+        do
+            local i = 0
+            local j = #ring - 1
+            while i < #ring do
+                local ax, ay = table.unpack(ring[i + 1], 1, 2)
+                local bx, by = table.unpack(ring[j + 1], 1, 2)
+                if ay > y ~= (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax then
+                    inside = not inside
+                end
+                do
+                    j = i
+                    i = i + 1
+                end
+            end
+        end
+    end
+    return inside
+end
+local function edgesOf(____, outline)
+    return __TS__ArrayFlatMap(
+        outline,
+        function(____, ring) return __TS__ArrayMap(
+            ring,
+            function(____, ____bindingPattern0, i)
+                local ay
+                local ax
+                ax = ____bindingPattern0[1]
+                ay = ____bindingPattern0[2]
+                local bx, by = table.unpack(ring[(i + 1) % #ring + 1], 1, 2)
+                return {ax = ax, ay = ay, bx = bx, by = by}
+            end
+        ) end
+    )
+end
+local function cutsAlong(self, edge, others)
+    local cuts = {}
+    local dx, dy = edge.bx - edge.ax, edge.by - edge.ay
+    local length = dx * dx + dy * dy
+    for ____, other in ipairs(others) do
+        do
+            local ex, ey = other.bx - other.ax, other.by - other.ay
+            local cross = dx * ey - dy * ex
+            if math.abs(cross) < TINY then
+                if math.abs((other.ax - edge.ax) * dy - (other.ay - edge.ay) * dx) > TINY then
+                    goto __continue16
+                end
+                for ____, ____value in ipairs({{other.ax, other.ay}, {other.bx, other.by}}) do
+                    local px = ____value[1]
+                    local py = ____value[2]
+                    cuts[#cuts + 1] = ((px - edge.ax) * dx + (py - edge.ay) * dy) / length
+                end
+                goto __continue16
+            end
+            local t = ((other.ax - edge.ax) * ey - (other.ay - edge.ay) * ex) / cross
+            local u = ((other.ax - edge.ax) * dy - (other.ay - edge.ay) * dx) / cross
+            if u > -1e-7 and u < 1 + 1e-7 then
+                cuts[#cuts + 1] = t
+            end
+        end
+        ::__continue16::
+    end
+    return __sort(
+        nil,
+        __TS__ArrayFilter(
+            cuts,
+            function(____, t) return t > 1e-7 and t < 1 - 1e-7 end
+        ),
+        function(____, a, b) return a - b end
+    )
+end
+local function pieces(self, edges, others)
+    return __TS__ArrayFlatMap(
+        edges,
+        function(____, edge)
+            local ____array_0 = __TS__SparseArrayNew(
+                0,
+                table.unpack(cutsAlong(nil, edge, others))
+            )
+            __TS__SparseArrayPush(____array_0, 1)
+            local stops = {__TS__SparseArraySpread(____array_0)}
+            local function at(____, t)
+                return {edge.ax + (edge.bx - edge.ax) * t, edge.ay + (edge.by - edge.ay) * t}
+            end
+            local parts = {}
+            do
+                local i = 0
+                while i + 1 < #stops do
+                    do
+                        if stops[i + 1 + 1] - stops[i + 1] < 1e-7 then
+                            goto __continue29
+                        end
+                        local ax, ay = table.unpack(
+                            at(nil, stops[i + 1]),
+                            1,
+                            2
+                        )
+                        local bx, by = table.unpack(
+                            at(nil, stops[i + 1 + 1]),
+                            1,
+                            2
+                        )
+                        parts[#parts + 1] = {ax = ax, ay = ay, bx = bx, by = by}
+                    end
+                    ::__continue29::
+                    i = i + 1
+                end
+            end
+            return parts
+        end
+    )
+end
+function ____exports.combineOutlines(self, first, second, operation)
+    local function within(____, x, y)
+        local a = ____exports.insideOutline(nil, first, x, y)
+        local b = ____exports.insideOutline(nil, second, x, y)
+        local ____temp_2
+        if operation == "add" then
+            ____temp_2 = a or b
+        else
+            local ____temp_1
+            if operation == "cut" then
+                ____temp_1 = a and not b
+            else
+                ____temp_1 = a and b
+            end
+            ____temp_2 = ____temp_1
+        end
+        return ____temp_2
+    end
+    local edgesA, edgesB = edgesOf(nil, first), edgesOf(nil, second)
+    local kept = __TS__New(Map)
+    local ____array_3 = __TS__SparseArrayNew(table.unpack(pieces(nil, edgesA, edgesB)))
+    __TS__SparseArrayPush(
+        ____array_3,
+        table.unpack(pieces(nil, edgesB, edgesA))
+    )
+    for ____, edge in ipairs({__TS__SparseArraySpread(____array_3)}) do
+        do
+            local dx, dy = edge.bx - edge.ax, edge.by - edge.ay
+            local length = __hypot(nil, dx, dy)
+            if length < 1e-7 then
+                goto __continue33
+            end
+            local mx, my = (edge.ax + edge.bx) / 2, (edge.ay + edge.by) / 2
+            local step = math.min(0.00001, length / 4)
+            local nx, ny = -dy / length * step, dx / length * step
+            local left = within(nil, mx + nx, my + ny)
+            local right = within(nil, mx - nx, my - ny)
+            if left == right then
+                goto __continue33
+            end
+            local directed = left and edge or ({ax = edge.bx, ay = edge.by, bx = edge.ax, by = edge.ay})
+            kept:set(
+                (key(nil, directed.ax, directed.ay) .. ">") .. key(nil, directed.bx, directed.by),
+                directed
+            )
+        end
+        ::__continue33::
+    end
+    local from = __TS__New(Map)
+    for ____, edge in __TS__Iterator(kept:values()) do
+        local start = key(nil, edge.ax, edge.ay)
+        local ____from_set_5 = from.set
+        local ____array_4 = __TS__SparseArrayNew(table.unpack(from:get(start) or ({})))
+        __TS__SparseArrayPush(____array_4, edge)
+        ____from_set_5(
+            from,
+            start,
+            {__TS__SparseArraySpread(____array_4)}
+        )
+    end
+    local rings = {}
+    for ____, start in ipairs({__TS__Spread(from:keys())}) do
+        do
+            while true do
+                local ring = {}
+                local at = start
+                do
+                    local guard = 0
+                    while guard < 100000 do
+                        local ____opt_6 = from:get(at)
+                        local edge = ____opt_6 and table.remove(from:get(at))
+                        if not edge then
+                            break
+                        end
+                        ring[#ring + 1] = {edge.ax, edge.ay}
+                        at = key(nil, edge.bx, edge.by)
+                        if at == start then
+                            break
+                        end
+                        guard = guard + 1
+                    end
+                end
+                if #ring == 0 then
+                    break
+                end
+                if #ring >= 3 and at == start and math.abs(____exports.ringArea(nil, ring)) > 1e-10 then
+                    rings[#rings + 1] = withoutStraightPoints(nil, ring)
+                end
+            end
+        end
+    end
+    return __TS__ArrayFilter(
+        rings,
+        function(____, ring) return #ring >= 3 end
+    )
+end
+return ____exports
+ end,
+["core.model.sketch.index"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayFrom = ____lualib.__TS__ArrayFrom
+local __TS__ArrayPush = ____lualib.__TS__ArrayPush
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
+local __TS__ArrayReduce = ____lualib.__TS__ArrayReduce
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local Map = ____lualib.Map
+local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
+local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
+local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __hypot = ______shims.__hypot
+local __lor = ______shims.__lor
+local __or = ______shims.__or
+local __shl = ______shims.__shl
+local __sort = ______shims.__sort
+local __t = ______shims.__t
+local ____outline = require("core.model.outline.index")
+local ringArea = ____outline.ringArea
+local ROUND_STEPS = 8
+local CIRCLE_STEPS = 32
+local function unit(self, x, y)
+    local length = __lor(
+        nil,
+        __hypot(nil, x, y),
+        function() return 1 end
+    )
+    return {x / length, y / length, length}
+end
+function ____exports.circleRing(self, at, radius)
+    return __TS__ArrayFrom(
+        {length = CIRCLE_STEPS},
+        function(____, _, i)
+            local angle = i / CIRCLE_STEPS * math.pi * 2
+            return {
+                at[1] + math.cos(angle) * radius,
+                at[2] + math.sin(angle) * radius
+            }
+        end
+    )
+end
+function ____exports.roundedRing(self, points, radii, straight)
+    local out = {}
+    __TS__ArrayForEach(
+        points,
+        function(____, corner, i)
+            local radius = radii[i + 1] or 0
+            local before = points[(i + #points - 1) % #points + 1]
+            local after = points[(i + 1) % #points + 1]
+            local ux, uy, lu = table.unpack(
+                unit(nil, before[1] - corner[1], before[2] - corner[2]),
+                1,
+                3
+            )
+            local wx, wy, lw = table.unpack(
+                unit(nil, after[1] - corner[1], after[2] - corner[2]),
+                1,
+                3
+            )
+            local half = math.acos(math.max(
+                -1,
+                math.min(1, ux * wx + uy * wy)
+            )) / 2
+            if radius <= 0 or half < 0.02 or half > math.pi / 2 - 0.02 then
+                out[#out + 1] = corner
+                return
+            end
+            local reach = math.min(
+                radius / math.tan(half),
+                lu / 2,
+                lw / 2
+            )
+            local r = reach * math.tan(half)
+            local bx, by = table.unpack(
+                unit(nil, ux + wx, uy + wy),
+                1,
+                2
+            )
+            local centre = {
+                corner[1] + bx * r / math.sin(half),
+                corner[2] + by * r / math.sin(half)
+            }
+            local from = {corner[1] + ux * reach, corner[2] + uy * reach}
+            local to = {corner[1] + wx * reach, corner[2] + wy * reach}
+            local start = math.atan(from[2] - centre[2], from[1] - centre[1])
+            local sweep = math.atan(to[2] - centre[2], to[1] - centre[1]) - start
+            if sweep > math.pi then
+                sweep = sweep - math.pi * 2
+            end
+            if sweep < -math.pi then
+                sweep = sweep + math.pi * 2
+            end
+            if straight and straight[i + 1] then
+                __TS__ArrayPush(out, from, to)
+                return
+            end
+            do
+                local step = 0
+                while step <= ROUND_STEPS do
+                    local angle = start + sweep * step / ROUND_STEPS
+                    out[#out + 1] = {
+                        centre[1] + math.cos(angle) * r,
+                        centre[2] + math.sin(angle) * r
+                    }
+                    step = step + 1
+                end
+            end
+        end
+    )
+    return out
+end
+local function inside(self, ring, ____bindingPattern0)
+    local y
+    local x
+    x = ____bindingPattern0[1]
+    y = ____bindingPattern0[2]
+    local hit = false
+    do
+        local i = 0
+        local j = #ring - 1
+        while i < #ring do
+            local a, b = ring[i + 1], ring[j + 1]
+            if a[2] > y ~= (b[2] > y) and x < (b[1] - a[1]) * (y - a[2]) / (b[2] - a[2]) + a[1] then
+                hit = not hit
+            end
+            local ____i_2 = i
+            i = ____i_2 + 1
+            j = ____i_2
+        end
+    end
+    return hit
+end
+local function pieceAt(____, shapes, at)
+    return __TS__ArrayReduce(
+        shapes,
+        function(____, piece, shape, i) return inside(nil, shape, at) and __or(
+            nil,
+            piece,
+            __shl(nil, 1, i)
+        ) or piece end,
+        0
+    )
+end
+local function keyOf(____, p)
+    return (tostring(math.floor(p[1] * 100000 + 0.5)) .. ",") .. tostring(math.floor(p[2] * 100000 + 0.5))
+end
+function ____exports.pickedOutline(self, shapes, picks)
+    local picked = __TS__New(Set)
+    if picks and #picks > 0 then
+        for ____, pick in ipairs(picks) do
+            local piece = pieceAt(nil, shapes, pick)
+            if __t(nil, piece) then
+                picked:add(piece)
+            end
+        end
+    else
+        do
+            local piece = 1
+            while piece < __shl(nil, 1, #shapes) do
+                picked:add(piece)
+                piece = piece + 1
+            end
+        end
+    end
+    local edges = __TS__ArrayFilter(
+        __TS__ArrayFlatMap(
+            shapes,
+            function(____, shape) return __TS__ArrayMap(
+                shape,
+                function(____, a, i) return {a, shape[(i + 1) % #shape + 1]} end
+            ) end
+        ),
+        function(____, ____bindingPattern0)
+            local b
+            local a
+            a = ____bindingPattern0[1]
+            b = ____bindingPattern0[2]
+            return __hypot(nil, b[1] - a[1], b[2] - a[2]) > 1e-9
+        end
+    )
+    local pieces = {}
+    local seen = __TS__New(Set)
+    for ____, edge in ipairs(edges) do
+        local a, b = table.unpack(edge, 1, 2)
+        local d = {b[1] - a[1], b[2] - a[2]}
+        local length = __hypot(nil, d[1], d[2])
+        local cuts = {0, 1}
+        for ____, other in ipairs(edges) do
+            do
+                if other == edge then
+                    goto __continue33
+                end
+                local c, e = table.unpack(other, 1, 2)
+                local f = {e[1] - c[1], e[2] - c[2]}
+                local cross = d[1] * f[2] - d[2] * f[1]
+                if math.abs(cross) > 1e-12 then
+                    local t = ((c[1] - a[1]) * f[2] - (c[2] - a[2]) * f[1]) / cross
+                    local u = ((c[1] - a[1]) * d[2] - (c[2] - a[2]) * d[1]) / cross
+                    if t > 1e-9 and t < 1 - 1e-9 and u >= -1e-9 and u <= 1 + 1e-9 then
+                        cuts[#cuts + 1] = t
+                    end
+                    goto __continue33
+                end
+                for ____, p in ipairs({c, e}) do
+                    local t = ((p[1] - a[1]) * d[1] + (p[2] - a[2]) * d[2]) / (length * length)
+                    local off = math.abs((p[1] - a[1]) * d[2] - (p[2] - a[2]) * d[1]) / length
+                    if off < 1e-7 and t > 1e-9 and t < 1 - 1e-9 then
+                        cuts[#cuts + 1] = t
+                    end
+                end
+            end
+            ::__continue33::
+        end
+        __sort(
+            nil,
+            cuts,
+            function(____, x, y) return x - y end
+        )
+        local left = {-d[2] / length * 0.0001, d[1] / length * 0.0001}
+        do
+            local i = 0
+            while i + 1 < #cuts do
+                do
+                    local t0, t1 = cuts[i + 1], cuts[i + 1 + 1]
+                    if t1 - t0 < 1e-9 then
+                        goto __continue43
+                    end
+                    local p = {a[1] + d[1] * t0, a[2] + d[2] * t0}
+                    local q = {a[1] + d[1] * t1, a[2] + d[2] * t1}
+                    local middle = {(p[1] + q[1]) / 2, (p[2] + q[2]) / 2}
+                    local onLeft = picked:has(pieceAt(nil, shapes, {middle[1] + left[1], middle[2] + left[2]}))
+                    local onRight = picked:has(pieceAt(nil, shapes, {middle[1] - left[1], middle[2] - left[2]}))
+                    if onLeft == onRight then
+                        goto __continue43
+                    end
+                    local piece = onLeft and ({p, q}) or ({q, p})
+                    local key = (keyOf(nil, piece[1]) .. ">") .. keyOf(nil, piece[2])
+                    if not seen:has(key) then
+                        seen:add(key)
+                        pieces[#pieces + 1] = piece
+                    end
+                end
+                ::__continue43::
+                i = i + 1
+            end
+        end
+    end
+    local from = __TS__New(Map)
+    for ____, piece in ipairs(pieces) do
+        local ____from_set_5 = from.set
+        local ____keyOf_result_4 = keyOf(nil, piece[1])
+        local ____array_3 = __TS__SparseArrayNew(table.unpack(from:get(keyOf(nil, piece[1])) or ({})))
+        __TS__SparseArrayPush(____array_3, piece)
+        ____from_set_5(
+            from,
+            ____keyOf_result_4,
+            {__TS__SparseArraySpread(____array_3)}
+        )
+    end
+    local used = __TS__New(Set)
+    local outline = {}
+    for ____, first in ipairs(pieces) do
+        do
+            if used:has(first) then
+                goto __continue50
+            end
+            local ring = {}
+            local now = first
+            do
+                local guard = 0
+                while guard <= #pieces do
+                    used:add(now)
+                    ring[#ring + 1] = now[1]
+                    if keyOf(nil, now[2]) == keyOf(nil, first[1]) then
+                        break
+                    end
+                    local way = {now[2][1] - now[1][1], now[2][2] - now[1][2]}
+                    local next
+                    local most = -math.huge
+                    for ____, candidate in ipairs(from:get(keyOf(nil, now[2])) or ({})) do
+                        do
+                            if used:has(candidate) then
+                                goto __continue55
+                            end
+                            local to = {candidate[2][1] - candidate[1][1], candidate[2][2] - candidate[1][2]}
+                            local turn = math.atan(way[1] * to[2] - way[2] * to[1], way[1] * to[1] + way[2] * to[2])
+                            if turn > most then
+                                most = turn
+                                next = candidate
+                            end
+                        end
+                        ::__continue55::
+                    end
+                    if not next then
+                        break
+                    end
+                    now = next
+                    guard = guard + 1
+                end
+            end
+            local plain = __TS__ArrayFilter(
+                ring,
+                function(____, p, i)
+                    local before, after = ring[(i + #ring - 1) % #ring + 1], ring[(i + 1) % #ring + 1]
+                    return math.abs((p[1] - before[1]) * (after[2] - p[2]) - (p[2] - before[2]) * (after[1] - p[1])) > 1e-9
+                end
+            )
+            if #plain >= 3 and math.abs(ringArea(nil, plain)) > 1e-8 then
+                outline[#outline + 1] = plain
+            end
+        end
+        ::__continue50::
+    end
+    return __sort(
+        nil,
+        outline,
+        function(____, x, y) return math.abs(ringArea(nil, y)) - math.abs(ringArea(nil, x)) end
+    )
+end
+return ____exports
+ end,
+["core.model.solid.combine"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayReverse = ____lualib.__TS__ArrayReverse
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
+local __TS__Class = ____lualib.__TS__Class
+local __TS__New = ____lualib.__TS__New
+local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
+local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
+local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
+local __TS__ArrayPushArray = ____lualib.__TS__ArrayPushArray
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __hypot = ______shims.__hypot
+local __or = ______shims.__or
+local EPSILON = 0.000001
+local function dot(____, a, b)
+    return a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
+end
+local function mix(____, a, b, t)
+    return {a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t, a[3] + (b[3] - a[3]) * t}
+end
+function ____exports.faceOf(self, corners)
+    local a, b, c = corners[1].at, corners[2].at, corners[3].at
+    local u, v = {b[1] - a[1], b[2] - a[2], b[3] - a[3]}, {c[1] - a[1], c[2] - a[2], c[3] - a[3]}
+    local n = {u[2] * v[3] - u[3] * v[2], u[3] * v[1] - u[1] * v[3], u[1] * v[2] - u[2] * v[1]}
+    local length = __hypot(nil, n[1], n[2], n[3])
+    if length < 1e-12 then
+        return nil
+    end
+    local normal = {n[1] / length, n[2] / length, n[3] / length}
+    return {
+        corners = corners,
+        plane = {
+            normal = normal,
+            w = dot(nil, normal, a)
+        }
+    }
+end
+local function turnedOver(____, face)
+    return {
+        corners = __TS__ArrayMap(
+            __TS__ArrayReverse({table.unpack(face.corners)}),
+            function(____, corner) return {at = corner.at, normal = {-corner.normal[1], -corner.normal[2], -corner.normal[3]}} end
+        ),
+        plane = {normal = {-face.plane.normal[1], -face.plane.normal[2], -face.plane.normal[3]}, w = -face.plane.w}
+    }
+end
+local ON, FRONT, BACK, ACROSS = 0, 1, 2, 3
+local function divide(self, plane, face, onFront, onBack, front, back)
+    local kind = 0
+    local sides = __TS__ArrayMap(
+        face.corners,
+        function(____, corner)
+            local distance = dot(nil, plane.normal, corner.at) - plane.w
+            local side = distance < -EPSILON and BACK or (distance > EPSILON and FRONT or ON)
+            kind = __or(nil, kind, side)
+            return side
+        end
+    )
+    if kind == ON then
+        local ____temp_0 = dot(nil, plane.normal, face.plane.normal) > 0 and onFront or onBack
+        ____temp_0[#____temp_0 + 1] = face
+    elseif kind == FRONT then
+        front[#front + 1] = face
+    elseif kind == BACK then
+        back[#back + 1] = face
+    elseif kind == ACROSS then
+        local before, behind = {}, {}
+        __TS__ArrayForEach(
+            face.corners,
+            function(____, corner, i)
+                local j = (i + 1) % #face.corners
+                local next = face.corners[j + 1]
+                if sides[i + 1] ~= BACK then
+                    before[#before + 1] = corner
+                end
+                if sides[i + 1] ~= FRONT then
+                    behind[#behind + 1] = corner
+                end
+                if __or(nil, sides[i + 1], sides[j + 1]) == ACROSS then
+                    local step = {next.at[1] - corner.at[1], next.at[2] - corner.at[2], next.at[3] - corner.at[3]}
+                    local t = (plane.w - dot(nil, plane.normal, corner.at)) / dot(nil, plane.normal, step)
+                    local cut = {
+                        at = mix(nil, corner.at, next.at, t),
+                        normal = mix(nil, corner.normal, next.normal, t)
+                    }
+                    before[#before + 1] = cut
+                    behind[#behind + 1] = cut
+                end
+            end
+        )
+        if #before >= 3 then
+            front[#front + 1] = {corners = before, plane = face.plane}
+        end
+        if #behind >= 3 then
+            back[#back + 1] = {corners = behind, plane = face.plane}
+        end
+    end
+end
+local Tree = __TS__Class()
+Tree.name = "Tree"
+function Tree.prototype.____constructor(self, faces)
+    if faces == nil then
+        faces = {}
+    end
+    self.faces = {}
+    self:take(faces)
+end
+function Tree.prototype.take(self, all)
+    local node = self
+    local faces = all
+    while #faces > 0 do
+        if node.plane == nil then
+            node.plane = faces[1].plane
+        end
+        local front, back = {}, {}
+        for ____, face in ipairs(faces) do
+            divide(
+                nil,
+                node.plane,
+                face,
+                node.faces,
+                node.faces,
+                front,
+                back
+            )
+        end
+        if #front > 0 then
+            if node.front == nil then
+                node.front = __TS__New(Tree)
+            end
+            node.front:take(front)
+        end
+        if #back == 0 then
+            return
+        end
+        if node.back == nil then
+            node.back = __TS__New(Tree)
+        end
+        node = node.back
+        faces = back
+    end
+end
+function Tree.prototype.turnOver(self)
+    do
+        local node = self
+        while node do
+            local stack = {node}
+            while #stack > 0 do
+                local at = table.remove(stack)
+                at.faces = __TS__ArrayMap(at.faces, turnedOver)
+                if at.plane then
+                    at.plane = {normal = {-at.plane.normal[1], -at.plane.normal[2], -at.plane.normal[3]}, w = -at.plane.w}
+                end
+                local ____temp_1 = {at.back, at.front}
+                at.front = ____temp_1[1]
+                at.back = ____temp_1[2]
+                if at.front then
+                    stack[#stack + 1] = at.front
+                end
+                if at.back then
+                    stack[#stack + 1] = at.back
+                end
+            end
+            node = nil
+        end
+    end
+end
+function Tree.prototype.outside(self, faces)
+    if not self.plane then
+        return faces
+    end
+    local front, back = {}, {}
+    for ____, face in ipairs(faces) do
+        divide(
+            nil,
+            self.plane,
+            face,
+            front,
+            back,
+            front,
+            back
+        )
+    end
+    local kept = self.front and self.front:outside(front) or front
+    local ____table_back_3
+    if self.back then
+        local ____array_2 = __TS__SparseArrayNew(table.unpack(kept))
+        __TS__SparseArrayPush(
+            ____array_2,
+            table.unpack(self.back:outside(back))
+        )
+        ____table_back_3 = {__TS__SparseArraySpread(____array_2)}
+    else
+        ____table_back_3 = kept
+    end
+    return ____table_back_3
+end
+function Tree.prototype.clipTo(self, other)
+    local stack = {self}
+    while #stack > 0 do
+        local at = table.remove(stack)
+        at.faces = other:outside(at.faces)
+        if at.front then
+            stack[#stack + 1] = at.front
+        end
+        if at.back then
+            stack[#stack + 1] = at.back
+        end
+    end
+end
+function Tree.prototype.all(self)
+    local found = {}
+    local stack = {self}
+    while #stack > 0 do
+        local at = table.remove(stack)
+        __TS__ArrayPushArray(found, at.faces)
+        if at.front then
+            stack[#stack + 1] = at.front
+        end
+        if at.back then
+            stack[#stack + 1] = at.back
+        end
+    end
+    return found
+end
+function ____exports.joinBodies(self, first, second, joining)
+    local a = __TS__New(Tree, first)
+    local b = __TS__New(Tree, second)
+    if joining == "add" then
+        a:clipTo(b)
+        b:clipTo(a)
+        b:turnOver()
+        b:clipTo(a)
+        b:turnOver()
+        a:take(b:all())
+        return a:all()
+    end
+    a:turnOver()
+    if joining == "cut" then
+        a:clipTo(b)
+        b:clipTo(a)
+        b:turnOver()
+        b:clipTo(a)
+        b:turnOver()
+    else
+        b:clipTo(a)
+        b:turnOver()
+        a:clipTo(b)
+        b:clipTo(a)
+    end
+    a:take(b:all())
+    a:turnOver()
+    return a:all()
+end
+return ____exports
+ end,
+["core.model.solid.index"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
+local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
+local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
+local __TS__ArraySome = ____lualib.__TS__ArraySome
+local __TS__ArraySlice = ____lualib.__TS__ArraySlice
+local __TS__ArraySplice = ____lualib.__TS__ArraySplice
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayForEach = ____lualib.__TS__ArrayForEach
+local __TS__ArrayEvery = ____lualib.__TS__ArrayEvery
+local __TS__ArrayReduce = ____lualib.__TS__ArrayReduce
+local __TS__ArrayReverse = ____lualib.__TS__ArrayReverse
+local __TS__ArrayFind = ____lualib.__TS__ArrayFind
+local __TS__ArrayFrom = ____lualib.__TS__ArrayFrom
+local __TS__ArrayPush = ____lualib.__TS__ArrayPush
+local __TS__New = ____lualib.__TS__New
+local __TS__ArrayPushArray = ____lualib.__TS__ArrayPushArray
+local __TS__MathSign = ____lualib.__TS__MathSign
+local __TS__StringStartsWith = ____lualib.__TS__StringStartsWith
+local __TS__StringSlice = ____lualib.__TS__StringSlice
+local ____exports = {}
+local segmentsCross, inRing, withStraightPoints, inset, holds, safeChamfer, fractions, sampleRing, partners, wallRings, ringKept, meet, outlines, edgeCutter, cross, ROUND_STEPS
+local ______shims = require("core.__shims")
+local __hypot = ______shims.__hypot
+local __json = ______shims.__json
+local __jsonParse = ______shims.__jsonParse
+local __lor = ______shims.__lor
+local __sort = ______shims.__sort
+local __t = ______shims.__t
+local ____outline = require("core.model.outline.index")
+local ringArea = ____outline.ringArea
+local ____sketch = require("core.model.sketch.index")
+local roundedRing = ____sketch.roundedRing
+local ____combine = require("core.model.solid.combine")
+local faceOf = ____combine.faceOf
+local joinBodies = ____combine.joinBodies
+function segmentsCross(self, a, b, c, d)
+    local d1, d2, d3, d4 = cross(nil, c, d, a), cross(nil, c, d, b), cross(nil, a, b, c), cross(nil, a, b, d)
+    return d1 * d2 < -1e-14 and d3 * d4 < -1e-14
+end
+function inRing(self, ring, ____bindingPattern0)
+    local y
+    local x
+    x = ____bindingPattern0[1]
+    y = ____bindingPattern0[2]
+    local inside = false
+    do
+        local i = 0
+        local j = #ring - 1
+        while i < #ring do
+            local ax, ay = table.unpack(ring[i + 1], 1, 2)
+            local bx, by = table.unpack(ring[j + 1], 1, 2)
+            if ay > y ~= (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax then
+                inside = not inside
+            end
+            do
+                j = i
+                i = i + 1
+            end
+        end
+    end
+    return inside
+end
+function withStraightPoints(self, triangles, rings)
+    local list = {table.unpack(triangles)}
+    for ____, ring in ipairs(rings) do
+        __TS__ArrayForEach(
+            ring,
+            function(____, point)
+                do
+                    local t = 0
+                    while t < #list do
+                        local tri = list[t + 1]
+                        do
+                            local e = 0
+                            while e < 3 do
+                                do
+                                    local u, v, w = tri[e + 1], tri[(e + 1) % 3 + 1], tri[(e + 2) % 3 + 1]
+                                    local length = __hypot(nil, v[1] - u[1], v[2] - u[2])
+                                    if point == u or point == v or length < 1e-12 then
+                                        goto __continue44
+                                    end
+                                    local along = ((point[1] - u[1]) * (v[1] - u[1]) + (point[2] - u[2]) * (v[2] - u[2])) / (length * length)
+                                    if along <= 1e-9 or along >= 1 - 1e-9 or math.abs(cross(nil, u, v, point)) / length > 1e-9 then
+                                        goto __continue44
+                                    end
+                                    __TS__ArraySplice(
+                                        list,
+                                        t,
+                                        1,
+                                        {u, point, w},
+                                        {point, v, w}
+                                    )
+                                    return
+                                end
+                                ::__continue44::
+                                e = e + 1
+                            end
+                        end
+                        t = t + 1
+                    end
+                end
+            end
+        )
+    end
+    return list
+end
+function inset(self, ring, distance)
+    if distance == 0 then
+        return ring
+    end
+    return __TS__ArrayMap(
+        ring,
+        function(____, point, i)
+            local before = ring[(i + #ring - 1) % #ring + 1]
+            local after = ring[(i + 1) % #ring + 1]
+            local function inward(____, from, to)
+                local length = __lor(
+                    nil,
+                    __hypot(nil, to[1] - from[1], to[2] - from[2]),
+                    function() return 1 end
+                )
+                return {-(to[2] - from[2]) / length, (to[1] - from[1]) / length}
+            end
+            local n1, n2 = inward(nil, before, point), inward(nil, point, after)
+            local sum = __lor(
+                nil,
+                __hypot(nil, n1[1] + n2[1], n1[2] + n2[2]),
+                function() return 1 end
+            )
+            local reach = math.min(
+                1.5 / sum,
+                1 / math.max(0.05, 1 + n1[1] * n2[1] + n1[2] * n2[2])
+            )
+            return {point[1] + (n1[1] + n2[1]) * reach * distance, point[2] + (n1[2] + n2[2]) * reach * distance}
+        end
+    )
+end
+function holds(self, rings, distance)
+    local drawn = __TS__ArrayMap(
+        rings,
+        function(____, ring) return inset(nil, ring, distance) end
+    )
+    local edges = {}
+    do
+        local r = 0
+        while r < #rings do
+            local before, after = rings[r + 1], drawn[r + 1]
+            do
+                local i = 0
+                while i < #before do
+                    local j = (i + 1) % #before
+                    local kept = (before[j + 1][1] - before[i + 1][1]) * (after[j + 1][1] - after[i + 1][1]) + (before[j + 1][2] - before[i + 1][2]) * (after[j + 1][2] - after[i + 1][2])
+                    if kept <= 0 then
+                        return false
+                    end
+                    edges[#edges + 1] = {after[i + 1], after[j + 1]}
+                    i = i + 1
+                end
+            end
+            r = r + 1
+        end
+    end
+    do
+        local a = 0
+        while a < #edges do
+            do
+                local b = a + 1
+                while b < #edges do
+                    if segmentsCross(
+                        nil,
+                        edges[a + 1][1],
+                        edges[a + 1][2],
+                        edges[b + 1][1],
+                        edges[b + 1][2]
+                    ) then
+                        return false
+                    end
+                    b = b + 1
+                end
+            end
+            a = a + 1
+        end
+    end
+    local bodies = __TS__ArrayFilter(
+        drawn,
+        function(____, _, r) return ringArea(nil, rings[r + 1]) > 0 end
+    )
+    return __TS__ArrayEvery(
+        drawn,
+        function(____, ring, r) return ringArea(nil, rings[r + 1]) >= 0 or __TS__ArrayEvery(
+            ring,
+            function(____, point) return __TS__ArraySome(
+                bodies,
+                function(____, body) return inRing(nil, body, point) end
+            ) end
+        ) end
+    )
+end
+function safeChamfer(self, rings, wanted)
+    if wanted <= 0 or holds(nil, rings, wanted) then
+        return math.max(0, wanted)
+    end
+    local low, high = 0, wanted
+    do
+        local step = 0
+        while step < 7 do
+            local middle = (low + high) / 2
+            if holds(nil, rings, middle) then
+                low = middle
+            else
+                high = middle
+            end
+            step = step + 1
+        end
+    end
+    return low * 0.9
+end
+function fractions(self, ring)
+    local lengths = __TS__ArrayMap(
+        ring,
+        function(____, p, i)
+            local q = ring[(i + 1) % #ring + 1]
+            return __hypot(nil, q[1] - p[1], q[2] - p[2])
+        end
+    )
+    local total = __lor(
+        nil,
+        __TS__ArrayReduce(
+            lengths,
+            function(____, sum, length) return sum + length end,
+            0
+        ),
+        function() return 1 end
+    )
+    local run = 0
+    return __TS__ArrayMap(
+        lengths,
+        function(____, length)
+            local at = run / total
+            run = run + length
+            return at
+        end
+    )
+end
+function sampleRing(self, ring, at, where)
+    return __TS__ArrayMap(
+        where,
+        function(____, t)
+            local i = #at - 1
+            while i > 0 and at[i + 1] > t do
+                i = i - 1
+            end
+            local next = i + 1 < #at and at[i + 1 + 1] or 1
+            local k = next - at[i + 1] > 1e-12 and (t - at[i + 1]) / (next - at[i + 1]) or 0
+            local p, q = ring[i + 1], ring[(i + 1) % #ring + 1]
+            return {p[1] + (q[1] - p[1]) * k, p[2] + (q[2] - p[2]) * k}
+        end
+    )
+end
+function partners(self, bottom, top)
+    local function middle(____, ring)
+        return {
+            __TS__ArrayReduce(
+                ring,
+                function(____, sum, p) return sum + p[1] end,
+                0
+            ) / #ring,
+            __TS__ArrayReduce(
+                ring,
+                function(____, sum, p) return sum + p[2] end,
+                0
+            ) / #ring
+        }
+    end
+    local upper = ringArea(nil, top) * ringArea(nil, bottom) < 0 and __TS__ArrayReverse({table.unpack(top)}) or top
+    local mb, mt = middle(nil, bottom), middle(nil, upper)
+    local way = math.atan(bottom[1][2] - mb[2], bottom[1][1] - mb[1])
+    local start = 0
+    local nearest = math.huge
+    __TS__ArrayForEach(
+        upper,
+        function(____, p, i)
+            local off = math.abs(math.atan(
+                math.sin(math.atan(p[2] - mt[2], p[1] - mt[1]) - way),
+                math.cos(math.atan(p[2] - mt[2], p[1] - mt[1]) - way)
+            ))
+            if off < nearest then
+                nearest = off
+                start = i
+            end
+        end
+    )
+    local ____array_3 = __TS__SparseArrayNew(table.unpack(__TS__ArraySlice(upper, start)))
+    __TS__SparseArrayPush(
+        ____array_3,
+        table.unpack(__TS__ArraySlice(upper, 0, start))
+    )
+    upper = {__TS__SparseArraySpread(____array_3)}
+    local fb, ft = fractions(nil, bottom), fractions(nil, upper)
+    local ____sort_5 = __sort
+    local ____array_4 = __TS__SparseArrayNew(table.unpack(fb))
+    __TS__SparseArrayPush(
+        ____array_4,
+        table.unpack(ft)
+    )
+    local all = __TS__ArrayFilter(
+        ____sort_5(
+            nil,
+            {__TS__SparseArraySpread(____array_4)},
+            function(____, a, b) return a - b end
+        ),
+        function(____, t, i, list) return i == 0 or t - list[i] > 0.0001 end
+    )
+    return {
+        sampleRing(nil, bottom, fb, all),
+        sampleRing(nil, upper, ft, all)
+    }
+end
+function wallRings(self, ring, height, walls)
+    if #walls == 0 then
+        return {ring, ring}
+    end
+    local count = #ring
+    local function planes(____, part)
+        return __TS__ArrayMap(
+            ring,
+            function(____, p, i)
+                local q = ring[(i + 1) % count + 1]
+                local length = __lor(
+                    nil,
+                    __hypot(nil, q[1] - p[1], q[2] - p[2]),
+                    function() return 1 end
+                )
+                local n = {(q[2] - p[2]) / length, -(q[1] - p[1]) / length}
+                local own = __TS__ArrayFind(
+                    walls,
+                    function(____, ____bindingPattern0)
+                        local at
+                        at = ____bindingPattern0[2]
+                        return at == i
+                    end
+                )
+                local push = (own and own[3] or 0) * part
+                local lean = math.tan((own and own[4] or 0) * part * math.pi / 180)
+                return {n = n, c = n[1] * p[1] + n[2] * p[2] + push, lean = lean}
+            end
+        )
+    end
+    local function rings(____, part)
+        local own = planes(nil, part)
+        return {
+            meet(nil, ring, own, 0),
+            meet(nil, ring, own, height)
+        }
+    end
+    local function keeps(____, ____bindingPattern0)
+        local high
+        local low
+        low = ____bindingPattern0[1]
+        high = ____bindingPattern0[2]
+        return __TS__ArrayEvery(
+            {low, high},
+            function(____, moved) return ringKept(nil, ring, moved) end
+        )
+    end
+    if keeps(
+        nil,
+        rings(nil, 1)
+    ) then
+        return rings(nil, 1)
+    end
+    local fine, over = 0, 1
+    do
+        local step = 0
+        while step < 8 do
+            local middle = (fine + over) / 2
+            if keeps(
+                nil,
+                rings(nil, middle)
+            ) then
+                fine = middle
+            else
+                over = middle
+            end
+            step = step + 1
+        end
+    end
+    return rings(nil, fine * 0.98)
+end
+function ringKept(self, before, after)
+    local count = #before
+    do
+        local i = 0
+        while i < count do
+            local j = (i + 1) % count
+            local kept = (before[j + 1][1] - before[i + 1][1]) * (after[j + 1][1] - after[i + 1][1]) + (before[j + 1][2] - before[i + 1][2]) * (after[j + 1][2] - after[i + 1][2])
+            if kept <= 1e-12 then
+                return false
+            end
+            i = i + 1
+        end
+    end
+    do
+        local a = 0
+        while a < count do
+            do
+                local b = a + 2
+                while b < count do
+                    do
+                        if (b + 1) % count == a then
+                            goto __continue113
+                        end
+                        if segmentsCross(
+                            nil,
+                            after[a + 1],
+                            after[(a + 1) % count + 1],
+                            after[b + 1],
+                            after[(b + 1) % count + 1]
+                        ) then
+                            return false
+                        end
+                    end
+                    ::__continue113::
+                    b = b + 1
+                end
+            end
+            a = a + 1
+        end
+    end
+    return true
+end
+function meet(self, ring, planes, y)
+    local count = #ring
+    return __TS__ArrayMap(
+        ring,
+        function(____, p, i)
+            local a, b = planes[(i + count - 1) % count + 1], planes[i + 1]
+            local ca, cb = a.c - a.lean * y, b.c - b.lean * y
+            local det = a.n[1] * b.n[2] - a.n[2] * b.n[1]
+            if math.abs(det) < 0.000001 then
+                local da, db = ca - (a.n[1] * p[1] + a.n[2] * p[2]), cb - (b.n[1] * p[1] + b.n[2] * p[2])
+                return {p[1] + (a.n[1] * da + b.n[1] * db) / 2, p[2] + (a.n[2] * da + b.n[2] * db) / 2}
+            end
+            return {(ca * b.n[2] - cb * a.n[2]) / det, (a.n[1] * cb - b.n[1] * ca) / det}
+        end
+    )
+end
+function outlines(self, shape)
+    local width, ____, depth = table.unpack(shape.size, 1, 3)
+    local function place(____, ring)
+        return __TS__ArrayMap(
+            ring,
+            function(____, ____bindingPattern0)
+                local y
+                local x
+                x = ____bindingPattern0[1]
+                y = ____bindingPattern0[2]
+                return {(x - 0.5) * width, (y - 0.5) * depth}
+            end
+        )
+    end
+    local function rounded(____, placed, r)
+        local own = __TS__ArrayFilter(
+            shape.corners or ({}),
+            function(____, ____bindingPattern0)
+                local at
+                at = ____bindingPattern0[1]
+                return at == r
+            end
+        )
+        if #own == 0 then
+            return placed
+        end
+        local sizes = __TS__ArrayMap(
+            placed,
+            function(____, _, i)
+                local ____opt_10 = __TS__ArrayFind(
+                    own,
+                    function(____, ____bindingPattern0)
+                        local at
+                        at = ____bindingPattern0[2]
+                        return at == i
+                    end
+                )
+                return ____opt_10 and ____opt_10[3] or 0
+            end
+        )
+        local straight = __TS__ArrayMap(
+            placed,
+            function(____, _, i)
+                local ____opt_12 = __TS__ArrayFind(
+                    own,
+                    function(____, ____bindingPattern0)
+                        local at
+                        at = ____bindingPattern0[2]
+                        return at == i
+                    end
+                )
+                return (____opt_12 and ____opt_12[4]) == 0
+            end
+        )
+        return roundedRing(nil, placed, sizes, straight)
+    end
+    local walled = __TS__ArrayMap(
+        shape.rings,
+        function(____, ring, r) return wallRings(
+            nil,
+            place(nil, ring),
+            shape.size[2],
+            __TS__ArrayFilter(
+                shape.walls or ({}),
+                function(____, ____bindingPattern0)
+                    local at
+                    at = ____bindingPattern0[1]
+                    return at == r
+                end
+            )
+        ) end
+    )
+    local bottom = __TS__ArrayMap(
+        walled,
+        function(____, ____bindingPattern0, r)
+            local low
+            low = ____bindingPattern0[1]
+            return rounded(nil, low, r)
+        end
+    )
+    local upper = __TS__ArrayMap(
+        walled,
+        function(____, ____bindingPattern0, r)
+            local high
+            high = ____bindingPattern0[2]
+            return rounded(nil, high, r)
+        end
+    )
+    local dx, dz = table.unpack(shape.shift or ({0, 0}), 1, 2)
+    local wanted = shape.taper or 0
+    local taper = wanted > 0 and safeChamfer(
+        nil,
+        shape.top and __TS__ArrayMap(shape.top, place) or upper,
+        wanted
+    ) or wanted
+    local function moved(____, ring)
+        return __TS__ArrayMap(
+            inset(nil, ring, taper),
+            function(____, ____bindingPattern0)
+                local z
+                local x
+                x = ____bindingPattern0[1]
+                z = ____bindingPattern0[2]
+                return {x + dx, z + dz}
+            end
+        )
+    end
+    local ____opt_14 = shape.top
+    local own = ____opt_14 and __TS__ArrayMap(shape.top, place)
+    if not own or #own ~= #bottom then
+        return {
+            bottom = bottom,
+            top = __TS__ArrayMap(
+                upper,
+                function(____, ring, r) return #ring == #bottom[r + 1] and moved(nil, ring) or moved(
+                    nil,
+                    partners(nil, bottom[r + 1], ring)[2]
+                ) end
+            )
+        }
+    end
+    local ____pairs = __TS__ArrayMap(
+        bottom,
+        function(____, ring, r) return partners(nil, ring, own[r + 1]) end
+    )
+    return {
+        bottom = __TS__ArrayMap(
+            ____pairs,
+            function(____, ____bindingPattern0)
+                local b
+                b = ____bindingPattern0[1]
+                return b
+            end
+        ),
+        top = __TS__ArrayMap(
+            ____pairs,
+            function(____, ____bindingPattern0)
+                local t
+                t = ____bindingPattern0[2]
+                return moved(nil, t)
+            end
+        )
+    }
+end
+function edgeCutter(self, shape, ____bindingPattern0)
+    local round
+    local top
+    local size
+    local i
+    local r
+    r = ____bindingPattern0[1]
+    i = ____bindingPattern0[2]
+    size = ____bindingPattern0[3]
+    top = ____bindingPattern0[4]
+    round = ____bindingPattern0[5]
+    local width, height, depth = table.unpack(shape.size, 1, 3)
+    local ring = shape.rings[r + 1]
+    if not ring or size <= 0 or not ring[i + 1] then
+        return nil
+    end
+    local function place(____, ____bindingPattern0)
+        local y
+        local x
+        x = ____bindingPattern0[1]
+        y = ____bindingPattern0[2]
+        return {(x - 0.5) * width, (y - 0.5) * depth}
+    end
+    local ____temp_38 = __t(nil, top) and not shape.top
+    if ____temp_38 then
+        local ____opt_36 = shape.corners
+        ____temp_38 = not (____opt_36 and __TS__ArraySome(
+            shape.corners,
+            function(____, ____bindingPattern0)
+                local at
+                at = ____bindingPattern0[1]
+                return at == r
+            end
+        ))
+    end
+    local moved = ____temp_38 and outlines(nil, shape).top[r + 1] or nil
+    local a, b = table.unpack(
+        moved and ({moved[i + 1], moved[(i + 1) % #moved + 1]}) or ({
+            place(nil, ring[i + 1]),
+            place(nil, ring[(i + 1) % #ring + 1])
+        }),
+        1,
+        2
+    )
+    local length = __hypot(nil, b[1] - a[1], b[2] - a[2])
+    if length < 1e-9 then
+        return nil
+    end
+    local along = {(b[1] - a[1]) / length, 0, (b[2] - a[2]) / length}
+    local out = {along[3], 0, -along[1]}
+    local away = {
+        0,
+        __t(nil, top) and 1 or -1,
+        0
+    }
+    local y = __t(nil, top) and height or 0
+    local s = math.min(size, height / 2, length / 2)
+    local e = s * 0.05 + 0.0001
+    local section = {{e, e}, {e, -s}}
+    if __t(nil, round) then
+        do
+            local k = 0
+            while k <= ROUND_STEPS * 2 do
+                local angle = k / (ROUND_STEPS * 2) * (math.pi / 2)
+                section[#section + 1] = {
+                    -s + s * math.cos(angle),
+                    -s + s * math.sin(angle)
+                }
+                k = k + 1
+            end
+        end
+    else
+        __TS__ArrayPush(section, {0, -s}, {-s, 0})
+    end
+    section[#section + 1] = {-s, e}
+    local ends = {-e, length + e}
+    local function point(____, o, w, t)
+        return {a[1] + along[1] * t + out[1] * o, y + away[2] * w, a[2] + along[3] * t + out[3] * o}
+    end
+    local positions = {}
+    local normals = {}
+    local function triangle(____, p, q, t, facing)
+        local u = {q[1] - p[1], q[2] - p[2], q[3] - p[3]}
+        local v = {t[1] - p[1], t[2] - p[2], t[3] - p[3]}
+        local n = {u[2] * v[3] - u[3] * v[2], u[3] * v[1] - u[1] * v[3], u[1] * v[2] - u[2] * v[1]}
+        local length = __hypot(nil, n[1], n[2], n[3])
+        if length < 1e-14 then
+            return
+        end
+        local flip = n[1] * facing[1] + n[2] * facing[2] + n[3] * facing[3] < 0
+        n = {n[1] / length, n[2] / length, n[3] / length}
+        local corners = flip and ({p, t, q}) or ({p, q, t})
+        for ____, c in ipairs(corners) do
+            __TS__ArrayPushArray(positions, c)
+            __TS__ArrayPushArray(normals, flip and ({-n[1], -n[2], -n[3]}) or n)
+        end
+    end
+    local count = #section
+    local turning = __lor(
+        nil,
+        __TS__MathSign(__TS__ArrayReduce(
+            section,
+            function(____, sum, ____bindingPattern0, k)
+                local w1
+                local o1
+                o1 = ____bindingPattern0[1]
+                w1 = ____bindingPattern0[2]
+                return sum + o1 * section[(k + 1) % count + 1][2] - section[(k + 1) % count + 1][1] * w1
+            end,
+            0
+        )),
+        function() return 1 end
+    )
+    do
+        local k = 0
+        while k < count do
+            local o1, w1 = table.unpack(section[k + 1], 1, 2)
+            local o2, w2 = table.unpack(section[(k + 1) % count + 1], 1, 2)
+            local no, nw = (w2 - w1) * turning, -(o2 - o1) * turning
+            local facing = {out[1] * no, away[2] * nw, out[3] * no}
+            local p, q, t, u = point(nil, o1, w1, ends[1]), point(nil, o2, w2, ends[1]), point(nil, o2, w2, ends[2]), point(nil, o1, w1, ends[2])
+            triangle(
+                nil,
+                p,
+                q,
+                t,
+                facing
+            )
+            triangle(
+                nil,
+                p,
+                t,
+                u,
+                facing
+            )
+            k = k + 1
+        end
+    end
+    for ____, ____value in ipairs({{ends[1], -1}, {ends[2], 1}}) do
+        local t = ____value[1]
+        local way = ____value[2]
+        do
+            local k = 1
+            while k + 1 < count do
+                triangle(
+                    nil,
+                    point(nil, section[1][1], section[1][2], t),
+                    point(nil, section[k + 1][1], section[k + 1][2], t),
+                    point(nil, section[k + 1 + 1][1], section[k + 1 + 1][2], t),
+                    {along[1] * way, 0, along[3] * way}
+                )
+                k = k + 1
+            end
+        end
+    end
+    return {
+        positions = __TS__New(Float32Array, positions),
+        normals = __TS__New(Float32Array, normals)
+    }
+end
+cross = function(____, o, a, b) return (a[1] - o[1]) * (b[2] - o[2]) - (a[2] - o[2]) * (b[1] - o[1]) end
+local function withBridges(self, body, holes)
+    local line = {table.unpack(body)}
+    local left = __sort(
+        nil,
+        {table.unpack(holes)},
+        function(____, a, b) return math.max(table.unpack(__TS__ArrayMap(
+            b,
+            function(____, p) return p[1] end
+        ))) - math.max(table.unpack(__TS__ArrayMap(
+            a,
+            function(____, p) return p[1] end
+        ))) end
+    )
+    for ____, hole in ipairs(left) do
+        do
+            local best
+            local nearest = math.huge
+            local ____array_0 = __TS__SparseArrayNew(table.unpack(__TS__ArrayMap(
+                line,
+                function(____, p, i) return {p, line[(i + 1) % #line + 1]} end
+            )))
+            __TS__SparseArrayPush(
+                ____array_0,
+                table.unpack(__TS__ArrayFlatMap(
+                    left,
+                    function(____, other) return __TS__ArrayMap(
+                        other,
+                        function(____, p, i) return {p, other[(i + 1) % #other + 1]} end
+                    ) end
+                ))
+            )
+            local edges = {__TS__SparseArraySpread(____array_0)}
+            do
+                local h = 0
+                while h < #hole do
+                    do
+                        local l = 0
+                        while l < #line do
+                            do
+                                local distance = __hypot(nil, hole[h + 1][1] - line[l + 1][1], hole[h + 1][2] - line[l + 1][2])
+                                if distance >= nearest or __TS__ArraySome(
+                                    edges,
+                                    function(____, ____bindingPattern0)
+                                        local d
+                                        local c
+                                        c = ____bindingPattern0[1]
+                                        d = ____bindingPattern0[2]
+                                        return segmentsCross(
+                                            nil,
+                                            hole[h + 1],
+                                            line[l + 1],
+                                            c,
+                                            d
+                                        )
+                                    end
+                                ) then
+                                    goto __continue19
+                                end
+                                nearest = distance
+                                best = {h, l}
+                            end
+                            ::__continue19::
+                            l = l + 1
+                        end
+                    end
+                    h = h + 1
+                end
+            end
+            if not best then
+                goto __continue12
+            end
+            local h, l = table.unpack(best, 1, 2)
+            local ____array_1 = __TS__SparseArrayNew(table.unpack(__TS__ArraySlice(hole, h)))
+            __TS__SparseArrayPush(
+                ____array_1,
+                table.unpack(__TS__ArraySlice(hole, 0, h))
+            )
+            __TS__SparseArrayPush(____array_1, hole[h + 1])
+            local round = {__TS__SparseArraySpread(____array_1)}
+            local ____array_2 = __TS__SparseArrayNew(table.unpack(__TS__ArraySlice(line, 0, l + 1)))
+            __TS__SparseArrayPush(
+                ____array_2,
+                table.unpack(round)
+            )
+            __TS__SparseArrayPush(
+                ____array_2,
+                table.unpack(__TS__ArraySlice(line, l))
+            )
+            line = {__TS__SparseArraySpread(____array_2)}
+        end
+        ::__continue12::
+    end
+    return line
+end
+local function ears(self, line)
+    local triangles = {}
+    local rest = {table.unpack(line)}
+    local guard = #rest * #rest + 8
+    while #rest > 3 and guard > 0 do
+        guard = guard - 1
+        local cut = false
+        do
+            local i = 0
+            while i < #rest do
+                do
+                    local a, b, c = rest[(i + #rest - 1) % #rest + 1], rest[i + 1], rest[(i + 1) % #rest + 1]
+                    if cross(nil, a, b, c) <= 1e-14 then
+                        goto __continue27
+                    end
+                    local blocked = __TS__ArraySome(
+                        rest,
+                        function(____, p) return p ~= a and p ~= b and p ~= c and cross(nil, a, b, p) > 1e-12 and cross(nil, b, c, p) > 1e-12 and cross(nil, c, a, p) > 1e-12 end
+                    )
+                    if blocked then
+                        goto __continue27
+                    end
+                    triangles[#triangles + 1] = {a, b, c}
+                    __TS__ArraySplice(rest, i, 1)
+                    cut = true
+                    break
+                end
+                ::__continue27::
+                i = i + 1
+            end
+        end
+        if not cut then
+            __TS__ArraySplice(rest, 0, 1)
+        end
+    end
+    if #rest == 3 and math.abs(cross(nil, rest[1], rest[2], rest[3])) > 1e-14 then
+        triangles[#triangles + 1] = {rest[1], rest[2], rest[3]}
+    end
+    return triangles
+end
+local function triangulate(self, rings, keepStraight)
+    if keepStraight == nil then
+        keepStraight = false
+    end
+    local bodies = __TS__ArrayFilter(
+        rings,
+        function(____, ring) return ringArea(nil, ring) > 0 end
+    )
+    local holes = __TS__ArrayFilter(
+        rings,
+        function(____, ring) return ringArea(nil, ring) < 0 end
+    )
+    local triangles = __TS__ArrayFlatMap(
+        bodies,
+        function(____, body) return ears(
+            nil,
+            withBridges(
+                nil,
+                body,
+                __TS__ArrayFilter(
+                    holes,
+                    function(____, hole) return inRing(nil, body, hole[1]) end
+                )
+            )
+        ) end
+    )
+    return keepStraight and withStraightPoints(nil, triangles, rings) or triangles
+end
+local SMOOTH = math.cos(32 * math.pi / 180)
+ROUND_STEPS = 6
+function ____exports.solidOutlines(self, shape)
+    return outlines(nil, shape)
+end
+local function plainSolid(self, shape)
+    local width, height, depth = table.unpack(shape.size, 1, 3)
+    local ____outlines_result_16 = outlines(nil, shape)
+    local rings = ____outlines_result_16.bottom
+    local tops = ____outlines_result_16.top
+    local ____temp_23 = shape.top ~= nil or Boolean(nil, shape.taper)
+    if not ____temp_23 then
+        local ____Boolean_22 = Boolean
+        local ____lor_21 = __lor
+        local ____opt_17 = shape.shift
+        ____temp_23 = ____Boolean_22(
+            nil,
+            ____lor_21(
+                nil,
+                ____opt_17 and ____opt_17[1],
+                function()
+                    local ____opt_19 = shape.shift
+                    return ____opt_19 and ____opt_19[2]
+                end
+            )
+        )
+    end
+    local ____temp_23_27 = ____temp_23
+    if not ____temp_23_27 then
+        local ____Boolean_26 = Boolean
+        local ____opt_24 = shape.walls
+        ____temp_23_27 = ____Boolean_26(nil, ____opt_24 and #____opt_24)
+    end
+    local lofted = ____temp_23_27
+    local function ringAt(____, r, y)
+        if not lofted then
+            return rings[r + 1]
+        end
+        local t = height > 0 and y / height or 0
+        return __TS__ArrayMap(
+            rings[r + 1],
+            function(____, p, i) return {p[1] + (tops[r + 1][i + 1][1] - p[1]) * t, p[2] + (tops[r + 1][i + 1][2] - p[2]) * t} end
+        )
+    end
+    local function most(____, wanted)
+        return math.max(
+            0,
+            math.min(
+                wanted,
+                height / 2 - 0.000001,
+                math.min(width, depth) / 4
+            )
+        )
+    end
+    local top = safeChamfer(
+        nil,
+        tops,
+        most(nil, shape.chamfer)
+    )
+    local bottom = safeChamfer(
+        nil,
+        rings,
+        most(nil, shape.chamferBottom or shape.chamfer)
+    )
+    local steps = shape.round and ROUND_STEPS or 1
+    local function profile(____, size)
+        return __TS__ArrayFrom(
+            {length = steps + 1},
+            function(____, _, k)
+                local angle = k / steps * (math.pi / 2)
+                return shape.round and ({
+                    inward = size * (1 - math.cos(angle)),
+                    along = size * math.sin(angle),
+                    out = math.cos(angle),
+                    up = math.sin(angle)
+                }) or ({inward = size * (k / steps), along = size * (k / steps), out = 0.7071067811865476, up = 0.7071067811865476})
+            end
+        )
+    end
+    local rims = {
+        {
+            size = top,
+            profile = profile(nil, top),
+            from = height - top,
+            way = 1
+        },
+        {
+            size = bottom,
+            profile = profile(nil, bottom),
+            from = bottom,
+            way = -1
+        }
+    }
+    local positions = {}
+    local normals = {}
+    local function corner(____, p, y, n)
+        __TS__ArrayPush(positions, p[1], y, p[2])
+        __TS__ArrayPush(normals, n[1], n[2], n[3])
+    end
+    local function triangle(____, a, b, c, n)
+        local u = {b[1][1] - a[1][1], b[2] - a[2], b[1][2] - a[1][2]}
+        local v = {c[1][1] - a[1][1], c[2] - a[2], c[1][2] - a[1][2]}
+        local face = {u[2] * v[3] - u[3] * v[2], u[3] * v[1] - u[1] * v[3], u[1] * v[2] - u[2] * v[1]}
+        local mean = {n[1][1] + n[2][1] + n[3][1], n[1][2] + n[2][2] + n[3][2], n[1][3] + n[2][3] + n[3][3]}
+        if face[1] * mean[1] + face[2] * mean[2] + face[3] * mean[3] >= 0 then
+            corner(nil, a[1], a[2], n[1])
+            corner(nil, b[1], b[2], n[2])
+            corner(nil, c[1], c[2], n[3])
+        else
+            corner(nil, a[1], a[2], n[1])
+            corner(nil, c[1], c[2], n[3])
+            corner(nil, b[1], b[2], n[2])
+        end
+    end
+    local function quad(____, a, b, c, d, n)
+        triangle(
+            nil,
+            a,
+            b,
+            c,
+            {n[1], n[2], n[3]}
+        )
+        triangle(
+            nil,
+            a,
+            c,
+            d,
+            {n[1], n[3], n[4]}
+        )
+    end
+    for ____, ____value in ipairs({{rims[1], height, 1}, {rims[2], 0, -1}}) do
+        local rim = ____value[1]
+        local y = ____value[2]
+        local up = ____value[3]
+        local caps = __TS__ArrayMap(
+            y > 0 and tops or rings,
+            function(____, ring) return inset(nil, ring, rim.size) end
+        )
+        for ____, ____value in ipairs(triangulate(nil, caps, shape.top ~= nil)) do
+            local a = ____value[1]
+            local b = ____value[2]
+            local c = ____value[3]
+            triangle(
+                nil,
+                {a, y},
+                {b, y},
+                {c, y},
+                {{0, up, 0}, {0, up, 0}, {0, up, 0}}
+            )
+        end
+    end
+    __TS__ArrayForEach(
+        rings,
+        function(____, ground, r)
+            local count = #ground
+            local ring = ringAt(nil, r, height / 2)
+            local out = __TS__ArrayMap(
+                ring,
+                function(____, point, i)
+                    local next = ring[(i + 1) % count + 1]
+                    local length = __lor(
+                        nil,
+                        __hypot(nil, next[1] - point[1], next[2] - point[2]),
+                        function() return 1 end
+                    )
+                    return {(next[2] - point[2]) / length, -(next[1] - point[1]) / length}
+                end
+            )
+            local function at(____, i, wall)
+                local other = out[(i == wall and wall + count - 1 or wall + 1) % count + 1]
+                local own = out[wall + 1]
+                if own[1] * other[1] + own[2] * other[2] < SMOOTH then
+                    return own
+                end
+                local length = __lor(
+                    nil,
+                    __hypot(nil, own[1] + other[1], own[2] + other[2]),
+                    function() return 1 end
+                )
+                return {(own[1] + other[1]) / length, (own[2] + other[2]) / length}
+            end
+            local drawn = __TS__ArrayMap(
+                rims,
+                function(____, rim) return __TS__ArrayMap(
+                    rim.profile,
+                    function(____, step)
+                        local level = ringAt(nil, r, rim.from + rim.way * step.along)
+                        return step.inward > 0 and inset(nil, level, step.inward) or level
+                    end
+                ) end
+            )
+            local low, high = ringAt(nil, r, bottom), ringAt(nil, r, height - top)
+            local function lean(____, n, i)
+                return height > 0 and ((tops[r + 1][i + 1][1] - ground[i + 1][1]) * n[1] + (tops[r + 1][i + 1][2] - ground[i + 1][2]) * n[2]) / height or 0
+            end
+            do
+                local i = 0
+                while i < count do
+                    local j = (i + 1) % count
+                    local ni, nj = at(nil, i, i), at(nil, j, i)
+                    local function side(____, n, k)
+                        local up = lofted and -lean(nil, n, k) or 0
+                        local length = __lor(
+                            nil,
+                            __hypot(nil, n[1], up, n[2]),
+                            function() return 1 end
+                        )
+                        return {n[1] / length, up / length, n[2] / length}
+                    end
+                    quad(
+                        nil,
+                        {low[i + 1], bottom},
+                        {low[j + 1], bottom},
+                        {high[j + 1], height - top},
+                        {high[i + 1], height - top},
+                        {
+                            side(nil, ni, i),
+                            side(nil, nj, j),
+                            side(nil, nj, j),
+                            side(nil, ni, i)
+                        }
+                    )
+                    __TS__ArrayForEach(
+                        rims,
+                        function(____, rim, r)
+                            if rim.size <= 0 then
+                                return
+                            end
+                            local function facing(____, n, k)
+                                local step = rim.profile[k + 1]
+                                local length = __lor(
+                                    nil,
+                                    __hypot(nil, step.out, step.up),
+                                    function() return 1 end
+                                )
+                                return {n[1] * step.out / length, rim.way * step.up / length, n[2] * step.out / length}
+                            end
+                            do
+                                local k = 0
+                                while k < steps do
+                                    local a, b = rim.profile[k + 1], rim.profile[k + 1 + 1]
+                                    local ya, yb = rim.from + rim.way * a.along, rim.from + rim.way * b.along
+                                    local ka, kb = table.unpack(shape.round and ({k, k + 1}) or ({0, 0}), 1, 2)
+                                    quad(
+                                        nil,
+                                        {drawn[r + 1][k + 1][i + 1], ya},
+                                        {drawn[r + 1][k + 1][j + 1], ya},
+                                        {drawn[r + 1][k + 1 + 1][j + 1], yb},
+                                        {drawn[r + 1][k + 1 + 1][i + 1], yb},
+                                        {
+                                            facing(nil, ni, ka),
+                                            facing(nil, nj, ka),
+                                            facing(nil, nj, kb),
+                                            facing(nil, ni, kb)
+                                        }
+                                    )
+                                    k = k + 1
+                                end
+                            end
+                        end
+                    )
+                    i = i + 1
+                end
+            end
+        end
+    )
+    return {
+        positions = __TS__New(Float32Array, positions),
+        normals = __TS__New(Float32Array, normals)
+    }
+end
+function ____exports.turn(self, ____bindingPattern0)
+    local z
+    local y
+    local x
+    x = ____bindingPattern0[1]
+    y = ____bindingPattern0[2]
+    z = ____bindingPattern0[3]
+    local a, b, c = table.unpack(
+        __TS__ArrayMap(
+            {x, y, z},
+            function(____, angle) return angle * math.pi / 180 end
+        ),
+        1,
+        3
+    )
+    local sa, ca, sb, cb, sc, cc = math.sin(a), math.cos(a), math.sin(b), math.cos(b), math.sin(c), math.cos(c)
+    return {
+        cc * cb,
+        cc * sb * sa - sc * ca,
+        cc * sb * ca + sc * sa,
+        sc * cb,
+        sc * sb * sa + cc * ca,
+        sc * sb * ca - cc * sa,
+        -sb,
+        cb * sa,
+        cb * ca
+    }
+end
+local function facesOf(self, geometry, position, rotation)
+    if position == nil then
+        position = {0, 0, 0}
+    end
+    if rotation == nil then
+        rotation = {0, 0, 0}
+    end
+    local m = ____exports.turn(nil, rotation)
+    local function turned(____, x, y, z)
+        return {m[1] * x + m[2] * y + m[3] * z, m[4] * x + m[5] * y + m[6] * z, m[7] * x + m[8] * y + m[9] * z}
+    end
+    local faces = {}
+    local ____geometry_28 = geometry
+    local positions = ____geometry_28.positions
+    local normals = ____geometry_28.normals
+    do
+        local i = 0
+        while i < positions.length do
+            local corners = __TS__ArrayMap(
+                {0, 3, 6},
+                function(____, k)
+                    local at = turned(nil, positions[i + k], positions[i + k + 1], positions[i + k + 2])
+                    return {
+                        at = {at[1] + position[1], at[2] + position[2], at[3] + position[3]},
+                        normal = turned(nil, normals[i + k], normals[i + k + 1], normals[i + k + 2])
+                    }
+                end
+            )
+            local face = faceOf(nil, corners)
+            if face then
+                faces[#faces + 1] = face
+            end
+            i = i + 9
+        end
+    end
+    return faces
+end
+function ____exports.buildSolid(self, shape)
+    local plain = plainSolid(nil, shape)
+    local ____t_31 = __t
+    local ____opt_29 = shape.joins
+    local ____temp_35 = not ____t_31(nil, ____opt_29 and #____opt_29)
+    if ____temp_35 then
+        local ____t_34 = __t
+        local ____opt_32 = shape.edges
+        ____temp_35 = not ____t_34(nil, ____opt_32 and #____opt_32)
+    end
+    if ____temp_35 then
+        return plain
+    end
+    local faces = facesOf(nil, plain)
+    for ____, join in ipairs(shape.joins or ({})) do
+        faces = joinBodies(
+            nil,
+            faces,
+            facesOf(
+                nil,
+                plainSolid(nil, join),
+                join.position,
+                join.rotation
+            ),
+            join.joining
+        )
+    end
+    for ____, edge in ipairs(shape.edges or ({})) do
+        local cutter = edgeCutter(nil, shape, edge)
+        if cutter then
+            faces = joinBodies(
+                nil,
+                faces,
+                facesOf(nil, cutter),
+                "cut"
+            )
+        end
+    end
+    local positions = {}
+    local normals = {}
+    for ____, face in ipairs(faces) do
+        do
+            local i = 1
+            while i + 1 < #face.corners do
+                for ____, corner in ipairs({face.corners[1], face.corners[i + 1], face.corners[i + 1 + 1]}) do
+                    __TS__ArrayPushArray(positions, corner.at)
+                    local length = __lor(
+                        nil,
+                        __hypot(
+                            nil,
+                            table.unpack(corner.normal)
+                        ),
+                        function() return 1 end
+                    )
+                    __TS__ArrayPush(normals, corner.normal[1] / length, corner.normal[2] / length, corner.normal[3] / length)
+                end
+                i = i + 1
+            end
+        end
+    end
+    return {
+        positions = __TS__New(Float32Array, positions),
+        normals = __TS__New(Float32Array, normals)
+    }
+end
+____exports.SOLID_ASSET = "solid:"
+____exports.solidAssetName = function(____, shape) return ____exports.SOLID_ASSET .. __json(nil, shape) end
+function ____exports.solidOfAsset(self, asset)
+    if not __TS__StringStartsWith(asset, ____exports.SOLID_ASSET) then
+        return nil
+    end
+    do
+        local function ____catch()
+            return true, nil
+        end
+        local ____try, ____hasReturned, ____returnValue = pcall(function()
+            return true, __jsonParse(
+                nil,
+                __TS__StringSlice(asset, #____exports.SOLID_ASSET)
+            )
+        end)
+        if not ____try then
+            ____hasReturned, ____returnValue = ____catch()
+        end
+        if ____hasReturned then
+            return ____returnValue
+        end
+    end
+end
+return ____exports
+ end,
+["core.model.terrain.index"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__New = ____lualib.__TS__New
+local __TS__ArrayPush = ____lualib.__TS__ArrayPush
+local __TS__ArrayPushArray = ____lualib.__TS__ArrayPushArray
+local __TS__StringStartsWith = ____lualib.__TS__StringStartsWith
+local __TS__StringSlice = ____lualib.__TS__StringSlice
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __hypot = ______shims.__hypot
+local __json = ______shims.__json
+local __jsonParse = ______shims.__jsonParse
+local __lor = ______shims.__lor
+local DEFAULT_DETAIL = 256
+local MOST_DETAIL = 1024
+function ____exports.terrainGrid(self, shape, columns, rows)
+    local most = math.min(
+        math.max(
+            math.floor((shape.detail or DEFAULT_DETAIL) + 0.5),
+            2
+        ),
+        MOST_DETAIL
+    )
+    local scale = math.min(
+        1,
+        most / math.max(columns, rows)
+    )
+    return {
+        math.max(
+            2,
+            math.floor(columns * scale + 0.5)
+        ),
+        math.max(
+            2,
+            math.floor(rows * scale + 0.5)
+        )
+    }
+end
+function ____exports.buildTerrain(self, shape, field)
+    local ____field_0 = field
+    local columns = ____field_0.columns
+    local rows = ____field_0.rows
+    local values = ____field_0.values
+    local width, rise, depth = table.unpack(shape.size, 1, 3)
+    local base = math.max(shape.base or rise * 0.25, 0)
+    local function x(____, column)
+        return (column / (columns - 1) - 0.5) * width
+    end
+    local function z(____, row)
+        return (row / (rows - 1) - 0.5) * depth
+    end
+    local function y(____, column, row)
+        return base + values[row * columns + column] * rise
+    end
+    local positions = __TS__New(Float32Array, columns * rows * 3)
+    local normals = __TS__New(Float32Array, columns * rows * 3)
+    local uvs = __TS__New(Float32Array, columns * rows * 2)
+    local stepX = width / (columns - 1)
+    local stepZ = depth / (rows - 1)
+    do
+        local row = 0
+        while row < rows do
+            do
+                local column = 0
+                while column < columns do
+                    local at = row * columns + column
+                    positions:set(
+                        {
+                            x(nil, column),
+                            y(nil, column, row),
+                            z(nil, row)
+                        },
+                        at * 3
+                    )
+                    uvs:set({column / (columns - 1), row / (rows - 1)}, at * 2)
+                    local left = math.max(column - 1, 0)
+                    local right = math.min(column + 1, columns - 1)
+                    local far = math.max(row - 1, 0)
+                    local near = math.min(row + 1, rows - 1)
+                    local slopeX = (y(nil, right, row) - y(nil, left, row)) / ((right - left) * stepX)
+                    local slopeZ = (y(nil, column, near) - y(nil, column, far)) / ((near - far) * stepZ)
+                    local length = __hypot(nil, slopeX, 1, slopeZ)
+                    normals:set({-slopeX / length, 1 / length, -slopeZ / length}, at * 3)
+                    column = column + 1
+                end
+            end
+            row = row + 1
+        end
+    end
+    local indices = __TS__New(Uint32Array, (columns - 1) * (rows - 1) * 6)
+    local next = 0
+    do
+        local row = 0
+        while row < rows - 1 do
+            do
+                local column = 0
+                while column < columns - 1 do
+                    local a = row * columns + column
+                    local b = a + columns
+                    indices:set({
+                        a,
+                        b,
+                        a + 1,
+                        a + 1,
+                        b,
+                        b + 1
+                    }, next)
+                    next = next + 6
+                    column = column + 1
+                end
+            end
+            row = row + 1
+        end
+    end
+    local sidePositions = {}
+    local sideNormals = {}
+    local function wall(____, from, to, facing)
+        local ax, ay, az = x(nil, from[1]), y(nil, from[1], from[2]), z(nil, from[2])
+        local bx, by, bz = x(nil, to[1]), y(nil, to[1], to[2]), z(nil, to[2])
+        __TS__ArrayPush(
+            sidePositions,
+            ax,
+            ay,
+            az,
+            ax,
+            0,
+            az,
+            bx,
+            0,
+            bz,
+            ax,
+            ay,
+            az,
+            bx,
+            0,
+            bz,
+            bx,
+            by,
+            bz
+        )
+        do
+            local corner = 0
+            while corner < 6 do
+                __TS__ArrayPushArray(sideNormals, facing)
+                corner = corner + 1
+            end
+        end
+    end
+    do
+        local column = 0
+        while column < columns - 1 do
+            wall(nil, {column + 1, 0}, {column, 0}, {0, 0, -1})
+            wall(nil, {column, rows - 1}, {column + 1, rows - 1}, {0, 0, 1})
+            column = column + 1
+        end
+    end
+    do
+        local row = 0
+        while row < rows - 1 do
+            wall(nil, {0, row}, {0, row + 1}, {-1, 0, 0})
+            wall(nil, {columns - 1, row + 1}, {columns - 1, row}, {1, 0, 0})
+            row = row + 1
+        end
+    end
+    local w, d = width / 2, depth / 2
+    __TS__ArrayPush(
+        sidePositions,
+        -w,
+        0,
+        -d,
+        w,
+        0,
+        -d,
+        w,
+        0,
+        d,
+        -w,
+        0,
+        -d,
+        w,
+        0,
+        d,
+        -w,
+        0,
+        d
+    )
+    do
+        local corner = 0
+        while corner < 6 do
+            __TS__ArrayPush(sideNormals, 0, -1, 0)
+            corner = corner + 1
+        end
+    end
+    return {
+        top = {positions = positions, normals = normals, uvs = uvs, indices = indices},
+        sides = {
+            positions = __TS__New(Float32Array, sidePositions),
+            normals = __TS__New(Float32Array, sideNormals)
+        }
+    }
+end
+function ____exports.resampleHeights(self, field, columns, rows)
+    if columns == field.columns and rows == field.rows then
+        return field
+    end
+    local values = __TS__New(Float32Array, columns * rows)
+    do
+        local row = 0
+        while row < rows do
+            local top = math.floor(row * field.rows / rows)
+            local bottom = math.max(
+                top + 1,
+                math.floor((row + 1) * field.rows / rows)
+            )
+            do
+                local column = 0
+                while column < columns do
+                    local left = math.floor(column * field.columns / columns)
+                    local right = math.max(
+                        left + 1,
+                        math.floor((column + 1) * field.columns / columns)
+                    )
+                    local sum = 0
+                    do
+                        local j = top
+                        while j < bottom do
+                            do
+                                local i = left
+                                while i < right do
+                                    sum = sum + field.values[j * field.columns + i]
+                                    i = i + 1
+                                end
+                            end
+                            j = j + 1
+                        end
+                    end
+                    values[row * columns + column] = sum / ((bottom - top) * (right - left))
+                    column = column + 1
+                end
+            end
+            row = row + 1
+        end
+    end
+    return {columns = columns, rows = rows, values = values}
+end
+function ____exports.heightsOfPixels(self, pixels, columns, rows)
+    local grey = true
+    do
+        local at = 0
+        while at < columns * rows * 4 and grey do
+            grey = math.abs(pixels[at] - pixels[at + 1]) <= 2 and math.abs(pixels[at] - pixels[at + 2]) <= 2
+            at = at + 4
+        end
+    end
+    local values = __TS__New(Float32Array, columns * rows)
+    local low = math.huge
+    local high = -math.huge
+    do
+        local at = 0
+        while at < columns * rows do
+            local red, green, blue = pixels[at * 4], pixels[at * 4 + 1], pixels[at * 4 + 2]
+            local value = grey and red or red * 256 + green + blue / 256 - 32768
+            values[at] = value
+            low = math.min(low, value)
+            high = math.max(high, value)
+            at = at + 1
+        end
+    end
+    local range = __lor(
+        nil,
+        high - low,
+        function() return 1 end
+    )
+    do
+        local at = 0
+        while at < values.length do
+            values[at] = (values[at] - low) / range
+            at = at + 1
+        end
+    end
+    return {columns = columns, rows = rows, values = values}
+end
+____exports.TERRAIN_ASSET = "terrain:"
+____exports.terrainAssetName = function(____, shape) return ____exports.TERRAIN_ASSET .. __json(nil, shape) end
+function ____exports.terrainOfAsset(self, asset)
+    if not __TS__StringStartsWith(asset, ____exports.TERRAIN_ASSET) then
+        return nil
+    end
+    do
+        local function ____catch()
+            return true, nil
+        end
+        local ____try, ____hasReturned, ____returnValue = pcall(function()
+            return true, __jsonParse(
+                nil,
+                __TS__StringSlice(asset, #____exports.TERRAIN_ASSET)
+            )
+        end)
+        if not ____try then
+            ____hasReturned, ____returnValue = ____catch()
+        end
+        if ____hasReturned then
+            return ____returnValue
+        end
+    end
+end
+return ____exports
+ end,
 ["core.sflSemantic.canvasObjects.artifacts.mesh.object"] = function(...) 
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
 local ____exports = {}
@@ -10100,6 +13948,9 @@ function ____exports.isMeshSurfaceObject(self, canvasObject)
 end
 function ____exports.isMeshLightObject(self, canvasObject)
     return canvasObject.objectType == "meshLight" and canvasObject.meshLight ~= nil
+end
+function ____exports.isMeshGroundObject(self, canvasObject)
+    return canvasObject.objectType == "meshGround" and canvasObject.meshGround ~= nil
 end
 function ____exports.isMeshObject(self, canvasObject)
     return canvasObject.objectType == "mesh" and canvasObject.mesh ~= nil
@@ -10112,17 +13963,77 @@ return ____exports
 ["core.sflSemantic.canvasObjects.artifacts.mesh.resolver"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local Map = ____lualib.Map
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayReverse = ____lualib.__TS__ArrayReverse
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayFlat = ____lualib.__TS__ArrayFlat
+local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
+local __TS__ArrayFind = ____lualib.__TS__ArrayFind
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
+local __TS__New = ____lualib.__TS__New
 local ____exports = {}
+local placedByUse, mirrorOf, mirrored, place
 local ______shims = require("core.__shims")
 local __t = ______shims.__t
+local ____facets = require("core.model.facets.index")
+local facetsAssetName = ____facets.facetsAssetName
 local ____mesh = require("core.model.mesh.index")
 local DEFAULT_LIGHT = ____mesh.DEFAULT_LIGHT
 local DEFAULT_ORBIT = ____mesh.DEFAULT_ORBIT
+local ____outline = require("core.model.outline.index")
+local ringArea = ____outline.ringArea
+local ____path = require("core.model.path.index")
+local flattenPath = ____path.flattenPath
+local ____sketch = require("core.model.sketch.index")
+local circleRing = ____sketch.circleRing
+local pickedOutline = ____sketch.pickedOutline
+local roundedRing = ____sketch.roundedRing
+local ____solid = require("core.model.solid.index")
+local solidAssetName = ____solid.solidAssetName
+local turn = ____solid.turn
+local ____terrain = require("core.model.terrain.index")
+local terrainAssetName = ____terrain.terrainAssetName
+local ____placement = require("core.sflLanguage.expansion.placement")
+local placeIn = ____placement.placeIn
+local product = ____placement.product
+local turnDegrees = ____placement.turnDegrees
+local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
+local childBlocks = ____blockEntries.childBlocks
+local directProperties = ____blockEntries.directProperties
+local placementValue = ____blockEntries.placementValue
 local ____valueAccess = require("core.sflSemantic.ast.valueAccess")
 local asNumber = ____valueAccess.asNumber
 local asString = ____valueAccess.asString
+local listNumbers = ____valueAccess.listNumbers
 local tupleValues = ____valueAccess.tupleValues
+function placedByUse(self, block, position, rotation, scale)
+    return block.placement and placeIn(
+        nil,
+        block.placement,
+        position,
+        rotation,
+        scale
+    ) or ({position = position, rotation = rotation, scale = scale})
+end
+function mirrorOf(self, block, properties)
+    return block.mirrored or asString(
+        nil,
+        properties:get("flip")
+    )
+end
+function mirrored(self, value, flip, acrossX, acrossZ)
+    local signs = flip == "x" and acrossX or (flip == "z" and acrossZ or nil)
+    return signs and ({value[1] * signs[1], value[2] * signs[2], value[3] * signs[3]}) or value
+end
+function place(self, value)
+    local x, y, z = table.unpack(
+        tupleValues(nil, value) or ({}),
+        1,
+        3
+    )
+    return x ~= nil and y ~= nil and z ~= nil and ({x, y, z}) or nil
+end
 local function vector(self, block, layoutProp, key, fallback)
     local value = layoutProp(nil, block, key)
     local single = asNumber(nil, value)
@@ -10152,59 +14063,660 @@ local function vector(self, block, layoutProp, key, fallback)
         axis(nil, "Z", z)
     }
 end
-function ____exports.resolveMeshObject(self, base, block, properties, layoutProp)
+local SQUARE = {{0, 0}, {1, 0}, {1, 1}, {0, 1}}
+local function outlineOf(self, properties, symbolDefs, flip)
+    local symbol = symbolDefs:get(asString(
+        nil,
+        properties:get("symbol")
+    ) or "")
+    local flat = symbol and (symbol.rings or ({__TS__ArrayMap(
+        flattenPath(
+            nil,
+            {
+                points = __TS__ArrayMap(
+                    symbol.points,
+                    function(____, ____bindingPattern0, index)
+                        local y
+                        local x
+                        x = ____bindingPattern0[1]
+                        y = ____bindingPattern0[2]
+                        local ____opt_0 = symbol.pointTensions
+                        local tension = ____opt_0 and ____opt_0[index + 1]
+                        return tension == nil and ({x = x, y = y}) or ({x = x, y = y, tension = tension})
+                    end
+                ),
+                tension = symbol.tension or 0,
+                closed = true
+            }
+        ),
+        function(____, point) return {point.x, point.y} end
+    )})) or ({SQUARE})
+    local rings = symbol and symbol.rings or __TS__ArrayMap(
+        flat,
+        function(____, ring) return ringArea(nil, ring) > 0 and ring or __TS__ArrayReverse({table.unpack(ring)}) end
+    )
+    return (flip == "x" or flip == "z") and __TS__ArrayMap(
+        rings,
+        function(____, ring) return __TS__ArrayReverse(__TS__ArrayMap(
+            ring,
+            function(____, ____bindingPattern0)
+                local y
+                local x
+                x = ____bindingPattern0[1]
+                y = ____bindingPattern0[2]
+                return flip == "x" and ({1 - x, y}) or ({x, 1 - y})
+            end
+        )) end
+    ) or rings
+end
+local function pair(____, value)
+    local x, y = table.unpack(
+        tupleValues(nil, value) or ({}),
+        1,
+        2
+    )
+    if x == nil then
+        x = 0
+    end
+    if y == nil then
+        y = 0
+    end
+    return {x, y}
+end
+local function sketchShapes(self, sketch)
+    return __TS__ArrayFlatMap(
+        childBlocks(nil, sketch),
+        function(____, shape)
+            local own = directProperties(nil, shape)
+            if shape.kind == "Circle" then
+                local radius = asNumber(
+                    nil,
+                    own:get("radius")
+                ) or 0
+                return radius > 0 and ({circleRing(
+                    nil,
+                    pair(
+                        nil,
+                        placementValue(nil, shape, "position", "at")
+                    ),
+                    radius
+                )}) or ({})
+            end
+            if shape.kind == "Rect" then
+                local x, y = table.unpack(
+                    pair(
+                        nil,
+                        placementValue(nil, shape, "position", "at")
+                    ),
+                    1,
+                    2
+                )
+                local width, height = table.unpack(
+                    pair(
+                        nil,
+                        placementValue(nil, shape, "size")
+                    ),
+                    1,
+                    2
+                )
+                local one = asNumber(
+                    nil,
+                    own:get("radius")
+                )
+                local radii = tupleValues(
+                    nil,
+                    own:get("radius")
+                ) or ({one or 0, one or 0, one or 0, one or 0})
+                return width > 0 and height > 0 and ({roundedRing(nil, {{x, y}, {x + width, y}, {x + width, y + height}, {x, y + height}}, radii)}) or ({})
+            end
+            local points = own:get("points")
+            if shape.kind ~= "Outline" or (points and points.type) ~= "list" then
+                return {}
+            end
+            local rows = __TS__ArrayFilter(
+                __TS__ArrayMap(
+                    points.values,
+                    function(____, item) return listNumbers(nil, item) or ({}) end
+                ),
+                function(____, row) return #row >= 2 end
+            )
+            return #rows >= 3 and ({roundedRing(
+                nil,
+                __TS__ArrayMap(
+                    rows,
+                    function(____, row) return {row[1], row[2]} end
+                ),
+                __TS__ArrayMap(
+                    rows,
+                    function(____, row) return row[3] or 0 end
+                )
+            )}) or ({})
+        end
+    )
+end
+local function fromSketch(self, properties, layoutProp, sketchDefs)
+    local sketch = sketchDefs and sketchDefs:get(asString(
+        nil,
+        properties:get("sketch")
+    ) or "")
+    if not sketch then
+        return nil
+    end
+    local pick = properties:get("pick")
+    local picks = (pick and pick.type) == "list" and __TS__ArrayFlatMap(
+        pick.values,
+        function(____, item)
+            local at = listNumbers(nil, item)
+            return at and #at >= 2 and ({{at[1], at[2]}}) or ({})
+        end
+    ) or ({})
+    local outline = pickedOutline(
+        nil,
+        sketchShapes(nil, sketch),
+        picks
+    )
+    local points = __TS__ArrayFlat(__TS__ArrayFilter(
+        outline,
+        function(____, ring) return ringArea(nil, ring) > 0 end
+    ))
+    if #points == 0 then
+        return nil
+    end
+    local xs = __TS__ArrayMap(
+        points,
+        function(____, point) return point[1] end
+    )
+    local ys = __TS__ArrayMap(
+        points,
+        function(____, point) return point[2] end
+    )
+    local left, top = math.min(table.unpack(xs)), math.min(table.unpack(ys))
+    local width, depth = math.max(table.unpack(xs)) - left, math.max(table.unpack(ys)) - top
+    if width < 1e-9 or depth < 1e-9 then
+        return nil
+    end
+    local rotation = vector(
+        nil,
+        sketch,
+        layoutProp,
+        "rotation",
+        0
+    )
+    local origin = vector(
+        nil,
+        sketch,
+        layoutProp,
+        "position",
+        0
+    )
+    local m = turn(nil, rotation)
+    local u, v = left + width / 2, top + depth / 2
+    return {
+        rings = __TS__ArrayMap(
+            outline,
+            function(____, ring) return __TS__ArrayMap(
+                ring,
+                function(____, ____bindingPattern0)
+                    local y
+                    local x
+                    x = ____bindingPattern0[1]
+                    y = ____bindingPattern0[2]
+                    return {(x - left) / width, (y - top) / depth}
+                end
+            ) end
+        ),
+        width = width,
+        depth = depth,
+        position = {origin[1] + m[1] * u + m[3] * v, origin[2] + m[4] * u + m[6] * v, origin[3] + m[7] * u + m[9] * v},
+        rotation = rotation
+    }
+end
+____exports.EDGE_WORDS_BEFORE = {
+    cut = "chamferEdges",
+    round = "filletEdges",
+    cutTop = "chamferTop",
+    cutBottom = "chamferBottom",
+    roundTop = "filletTop",
+    roundBottom = "filletBottom"
+}
+local function rimOf(self, properties)
+    local fillet = properties:get("fillet")
+    local value = fillet or properties:get("chamfer")
+    local top, bottom = table.unpack(
+        tupleValues(nil, value) or ({}),
+        1,
+        2
+    )
+    if top == nil then
+        top = asNumber(nil, value) or 0
+    end
+    if bottom == nil then
+        bottom = top
+    end
+    local function listOf(____, now)
+        local before = __TS__ArrayFind(
+            __TS__ObjectKeys(____exports.EDGE_WORDS_BEFORE),
+            function(____, word) return ____exports.EDGE_WORDS_BEFORE[word] == now end
+        )
+        local ____temp_11 = properties:get(now)
+        if ____temp_11 == nil then
+            local ____t_result_10
+            if __t(nil, before) then
+                ____t_result_10 = properties:get(before)
+            else
+                ____t_result_10 = nil
+            end
+            ____temp_11 = ____t_result_10
+        end
+        local list = ____temp_11
+        return (list and list.type) == "list" and __TS__ArrayFlatMap(
+            list.values,
+            function(____, item) return {listNumbers(nil, item) or ({})} end
+        ) or ({})
+    end
+    local corners = __TS__ArrayFlatMap(
+        {"chamferEdges", "filletEdges"},
+        function(____, name, kind) return __TS__ArrayFlatMap(
+            listOf(nil, name),
+            function(____, ____bindingPattern0)
+                local size
+                local at
+                local ring
+                ring = ____bindingPattern0[1]
+                at = ____bindingPattern0[2]
+                size = ____bindingPattern0[3]
+                return size ~= nil and size > 0 and ({{ring, at, size, kind}}) or ({})
+            end
+        ) end
+    )
+    local edges = __TS__ArrayFlatMap(
+        {{"chamferBottom", 0, 0}, {"chamferTop", 1, 0}, {"filletBottom", 0, 1}, {"filletTop", 1, 1}},
+        function(____, ____bindingPattern0)
+            local round
+            local atTop
+            local name
+            name = ____bindingPattern0[1]
+            atTop = ____bindingPattern0[2]
+            round = ____bindingPattern0[3]
+            return __TS__ArrayFlatMap(
+                listOf(nil, name),
+                function(____, ____bindingPattern0)
+                    local size
+                    local at
+                    local ring
+                    ring = ____bindingPattern0[1]
+                    at = ____bindingPattern0[2]
+                    size = ____bindingPattern0[3]
+                    return size ~= nil and size > 0 and ({{
+                        ring,
+                        at,
+                        size,
+                        atTop,
+                        round
+                    }}) or ({})
+                end
+            )
+        end
+    )
+    return __TS__ObjectAssign(
+        {},
+        #corners > 0 and ({corners = corners}) or ({}),
+        #edges > 0 and ({edges = edges}) or ({}),
+        {chamfer = top},
+        bottom ~= top and ({chamferBottom = bottom}) or ({}),
+        (fillet ~= nil or asString(
+            nil,
+            properties:get("edge")
+        ) == "round") and ({round = true}) or ({})
+    )
+end
+local function topOf(self, properties, symbolDefs, flip)
+    local list = properties:get("walls")
+    local walls = (list and list.type) == "list" and __TS__ArrayFlatMap(
+        list.values,
+        function(____, item)
+            local ring, at, push, lean = table.unpack(
+                listNumbers(nil, item) or ({}),
+                1,
+                4
+            )
+            if push == nil then
+                push = 0
+            end
+            if lean == nil then
+                lean = 0
+            end
+            return ring ~= nil and at ~= nil and (__t(nil, push) or __t(nil, lean)) and ({{ring, at, push, lean}}) or ({})
+        end
+    ) or ({})
+    local taper = asNumber(
+        nil,
+        properties:get("taper")
+    )
+    local x, z = table.unpack(
+        tupleValues(
+            nil,
+            properties:get("shift")
+        ) or ({}),
+        1,
+        2
+    )
+    if x == nil then
+        x = asNumber(
+            nil,
+            properties:get("shift")
+        ) or 0
+    end
+    if z == nil then
+        z = 0
+    end
+    local named = asString(
+        nil,
+        properties:get("loft")
+    )
+    local top = __t(nil, named) and symbolDefs:has(named) and outlineOf(
+        nil,
+        __TS__New(
+            Map,
+            {{
+                "symbol",
+                properties:get("loft")
+            }}
+        ),
+        symbolDefs,
+        flip
+    ) or nil
+    local shift = {flip == "x" and -x or x, flip == "z" and -z or z}
+    return __TS__ObjectAssign(
+        {},
+        __t(nil, taper) and ({taper = taper}) or ({}),
+        (__t(nil, shift[1]) or __t(nil, shift[2])) and ({shift = shift}) or ({}),
+        top and ({top = top}) or ({}),
+        #walls > 0 and ({walls = walls}) or ({})
+    )
+end
+local JOININGS = {Cut = "cut", Add = "add", Keep = "keep"}
+local function solidAsset(self, block, properties, layoutProp, symbolDefs, sketched)
+    local flip = mirrorOf(nil, block, properties)
+    local joins = __TS__ArrayMap(
+        __TS__ArrayFilter(
+            childBlocks(nil, block),
+            function(____, child) return JOININGS[child.kind] ~= nil end
+        ),
+        function(____, child)
+            local own = directProperties(nil, child)
+            return __TS__ObjectAssign(
+                {
+                    joining = JOININGS[child.kind],
+                    rings = outlineOf(nil, own, symbolDefs, flip),
+                    size = vector(
+                        nil,
+                        child,
+                        layoutProp,
+                        "size",
+                        1
+                    )
+                },
+                rimOf(nil, own),
+                topOf(nil, own, symbolDefs, flip),
+                {
+                    position = mirrored(
+                        nil,
+                        vector(
+                            nil,
+                            child,
+                            layoutProp,
+                            "position",
+                            0
+                        ),
+                        flip,
+                        {-1, 1, 1},
+                        {1, 1, -1}
+                    ),
+                    rotation = mirrored(
+                        nil,
+                        vector(
+                            nil,
+                            child,
+                            layoutProp,
+                            "rotation",
+                            0
+                        ),
+                        flip,
+                        {1, -1, -1},
+                        {-1, -1, 1}
+                    )
+                }
+            )
+        end
+    )
+    return solidAssetName(
+        nil,
+        __TS__ObjectAssign(
+            {
+                rings = sketched and sketched.rings or outlineOf(nil, properties, symbolDefs, flip),
+                size = sketched and ({
+                    sketched.width,
+                    asNumber(
+                        nil,
+                        properties:get("height")
+                    ) or vector(
+                        nil,
+                        block,
+                        layoutProp,
+                        "size",
+                        1
+                    )[2],
+                    sketched.depth
+                }) or vector(
+                    nil,
+                    block,
+                    layoutProp,
+                    "size",
+                    1
+                )
+            },
+            rimOf(nil, properties),
+            topOf(nil, properties, symbolDefs, flip),
+            #joins > 0 and ({joins = joins}) or ({})
+        )
+    )
+end
+local function facetsAsset(self, properties)
+    local function rows(____, key)
+        local list = properties:get(key)
+        return (list and list.type) == "list" and __TS__ArrayMap(
+            list.values,
+            function(____, item) return listNumbers(nil, item) or ({}) end
+        ) or ({})
+    end
+    local symmetry = asString(
+        nil,
+        properties:get("symmetry")
+    )
+    local thickness = asNumber(
+        nil,
+        properties:get("thickness")
+    )
+    local bevel = asNumber(
+        nil,
+        properties:get("bevel")
+    )
+    local shape = __TS__ObjectAssign(
+        {
+            points = __TS__ArrayMap(
+                __TS__ArrayFilter(
+                    rows(nil, "points"),
+                    function(____, row) return #row >= 3 end
+                ),
+                function(____, row) return {row[1], row[2], row[3]} end
+            ),
+            faces = __TS__ArrayFilter(
+                rows(nil, "faces"),
+                function(____, row) return #row >= 3 end
+            )
+        },
+        (symmetry == "x" or symmetry == "y" or symmetry == "z") and ({symmetry = symmetry}) or ({}),
+        __t(nil, thickness) and ({thickness = thickness}) or ({}),
+        __t(nil, bevel) and ({bevel = bevel}) or ({})
+    )
+    return facetsAssetName(nil, shape)
+end
+local function terrainAsset(self, block, properties, layoutProp)
+    local pictured = properties:get("picture")
+    local picture = asString(nil, pictured)
+    local surface = (pictured and pictured.type) == "ident" and table.concat(pictured.segments, ".") or nil
+    local base = asNumber(
+        nil,
+        properties:get("base")
+    )
+    local detail = asNumber(
+        nil,
+        properties:get("detail")
+    )
+    return terrainAssetName(
+        nil,
+        __TS__ObjectAssign(
+            {heights = asString(
+                nil,
+                properties:get("heights")
+            ) or ""},
+            __t(nil, surface) and ({surface = surface}) or (__t(nil, picture) and ({picture = picture}) or ({})),
+            {size = vector(
+                nil,
+                block,
+                layoutProp,
+                "size",
+                1
+            )},
+            base ~= nil and ({base = base}) or ({}),
+            __t(nil, detail) and ({detail = detail}) or ({})
+        )
+    )
+end
+function ____exports.resolveMeshObject(self, base, block, properties, layoutProp, symbolDefs, sketchDefs)
+    if symbolDefs == nil then
+        symbolDefs = __TS__New(Map)
+    end
+    local ____temp_22
+    if block.kind == "Solid" then
+        ____temp_22 = mirrorOf(nil, block, properties)
+    else
+        ____temp_22 = nil
+    end
+    local flip = ____temp_22
+    local ____temp_23
+    if block.kind == "Solid" then
+        ____temp_23 = fromSketch(nil, properties, layoutProp, sketchDefs)
+    else
+        ____temp_23 = nil
+    end
+    local sketched = ____temp_23
+    local own = vector(
+        nil,
+        block,
+        layoutProp,
+        "position",
+        0
+    )
+    local turned = sketched and turn(nil, sketched.rotation)
+    local placed = sketched and turned and ({sketched.position[1] + turned[1] * own[1] + turned[2] * own[2] + turned[3] * own[3], sketched.position[2] + turned[4] * own[1] + turned[5] * own[2] + turned[6] * own[3], sketched.position[3] + turned[7] * own[1] + turned[8] * own[2] + turned[9] * own[3]}) or nil
+    local where = placedByUse(
+        nil,
+        block,
+        placed or mirrored(
+            nil,
+            own,
+            flip,
+            {-1, 1, 1},
+            {1, 1, -1}
+        ),
+        sketched and turnDegrees(
+            nil,
+            product(
+                nil,
+                turn(nil, sketched.rotation),
+                turn(
+                    nil,
+                    vector(
+                        nil,
+                        block,
+                        layoutProp,
+                        "rotation",
+                        0
+                    )
+                )
+            )
+        ) or mirrored(
+            nil,
+            vector(
+                nil,
+                block,
+                layoutProp,
+                "rotation",
+                0
+            ),
+            flip,
+            {1, -1, -1},
+            {-1, -1, 1}
+        ),
+        vector(
+            nil,
+            block,
+            layoutProp,
+            "scale",
+            1
+        )
+    )
     return __TS__ObjectAssign(
         {},
         base,
         {
             objectType = "mesh",
-            mesh = {
-                asset = asString(
-                    nil,
-                    properties:get("asset")
-                ) or "",
-                role = asString(
-                    nil,
-                    properties:get("role")
-                ),
-                color = asString(
-                    nil,
-                    properties:get("color")
-                ),
-                opacity = asNumber(
-                    nil,
-                    properties:get("opacity")
-                ),
-                roughness = asNumber(
-                    nil,
-                    properties:get("roughness")
-                ),
-                metallic = asNumber(
-                    nil,
-                    properties:get("metallic")
-                ),
-                position = vector(
-                    nil,
-                    block,
-                    layoutProp,
-                    "position",
-                    0
-                ),
-                rotation = vector(
-                    nil,
-                    block,
-                    layoutProp,
-                    "rotation",
-                    0
-                ),
-                scale = vector(
-                    nil,
-                    block,
-                    layoutProp,
-                    "scale",
-                    1
-                )
-            }
+            mesh = __TS__ObjectAssign(
+                {
+                    asset = block.kind == "Solid" and solidAsset(
+                        nil,
+                        block,
+                        properties,
+                        layoutProp,
+                        symbolDefs,
+                        sketched
+                    ) or (block.kind == "Facets" and facetsAsset(nil, properties) or (block.kind == "Terrain" and terrainAsset(nil, block, properties, layoutProp) or (asString(
+                        nil,
+                        properties:get("asset")
+                    ) or ""))),
+                    role = asString(
+                        nil,
+                        properties:get("role")
+                    ),
+                    color = asString(
+                        nil,
+                        properties:get("color")
+                    ),
+                    opacity = asNumber(
+                        nil,
+                        properties:get("opacity")
+                    ),
+                    roughness = asNumber(
+                        nil,
+                        properties:get("roughness")
+                    ),
+                    metallic = asNumber(
+                        nil,
+                        properties:get("metallic")
+                    ),
+                    transmission = asNumber(
+                        nil,
+                        properties:get("transmission")
+                    ),
+                    ior = asNumber(
+                        nil,
+                        properties:get("ior")
+                    )
+                },
+                where
+            )
         }
     )
 end
@@ -10230,10 +14742,34 @@ function ____exports.resolveMeshSceneObject(self, base, properties)
             objectType = "meshScene",
             meshScene = {
                 orbit = {yaw, pitch},
+                zoom = asNumber(
+                    nil,
+                    properties:get("zoom")
+                ),
                 shadow = asString(
                     nil,
                     properties:get("shadow")
-                ) == "true"
+                ) == "true",
+                environment = asString(
+                    nil,
+                    properties:get("environment")
+                ),
+                environmentTurn = asNumber(
+                    nil,
+                    properties:get("environmentTurn")
+                ),
+                exposure = asNumber(
+                    nil,
+                    properties:get("exposure")
+                ),
+                haze = asNumber(
+                    nil,
+                    properties:get("haze")
+                ),
+                hazeColor = asString(
+                    nil,
+                    properties:get("hazeColor")
+                )
             }
         }
     )
@@ -10246,33 +14782,35 @@ function ____exports.resolveMeshSurfaceObject(self, base, block, layoutProp)
             x = 0,
             y = 0,
             objectType = "meshSurface",
-            meshSurface = {
-                position = vector(
+            meshSurface = placedByUse(
+                nil,
+                block,
+                vector(
                     nil,
                     block,
                     layoutProp,
                     "position",
                     0
                 ),
-                rotation = vector(
+                vector(
                     nil,
                     block,
                     layoutProp,
                     "rotation",
                     0
                 ),
-                scale = vector(
+                vector(
                     nil,
                     block,
                     layoutProp,
                     "scale",
                     1
                 )
-            }
+            )
         }
     )
 end
-function ____exports.resolveMeshLightObject(self, base, properties)
+function ____exports.resolveMeshLightObject(self, base, block, properties)
     return __TS__ObjectAssign(
         {},
         base,
@@ -10284,6 +14822,9 @@ function ____exports.resolveMeshLightObject(self, base, properties)
                     properties:get("turn")
                 ) or DEFAULT_LIGHT.turn,
                 height = asNumber(
+                    nil,
+                    properties:get("elevation")
+                ) or asNumber(
                     nil,
                     properties:get("height")
                 ) or DEFAULT_LIGHT.height,
@@ -10298,7 +14839,75 @@ function ____exports.resolveMeshLightObject(self, base, properties)
                 ambient = asNumber(
                     nil,
                     properties:get("ambient")
-                ) or DEFAULT_LIGHT.ambient
+                ) or DEFAULT_LIGHT.ambient,
+                ambientColor = asString(
+                    nil,
+                    properties:get("ambientColor")
+                ),
+                softness = asNumber(
+                    nil,
+                    properties:get("softness")
+                ),
+                position = place(
+                    nil,
+                    placementValue(nil, block, "position") or properties:get("position")
+                ),
+                glow = asNumber(
+                    nil,
+                    properties:get("glow")
+                )
+            }
+        }
+    )
+end
+function ____exports.resolveMeshGroundObject(self, base, block, properties)
+    local color = asString(
+        nil,
+        properties:get("color")
+    )
+    local placed = tupleValues(
+        nil,
+        placementValue(nil, block, "position")
+    )
+    local ____base_28 = base
+    local ____temp_27 = placed and placed[2] or asNumber(
+        nil,
+        properties:get("height")
+    )
+    local ____temp_26
+    if color == "none" then
+        ____temp_26 = nil
+    else
+        ____temp_26 = color
+    end
+    return __TS__ObjectAssign(
+        {},
+        ____base_28,
+        {
+            objectType = "meshGround",
+            meshGround = {
+                height = ____temp_27,
+                color = ____temp_26,
+                reflection = math.min(
+                    1,
+                    math.max(
+                        0,
+                        asNumber(
+                            nil,
+                            properties:get("reflection")
+                        ) or 0
+                    )
+                ),
+                roughness = math.min(
+                    1,
+                    math.max(
+                        0,
+                        asNumber(
+                            nil,
+                            properties:get("roughness")
+                        ) or 0
+                    )
+                )
             }
         }
     )
@@ -10529,7 +15138,7 @@ local function declaredCanvasObjectKind(self, block, properties)
     if block.kind == "Dimension" then
         return "dimension"
     end
-    if block.kind == "Mesh" then
+    if block.kind == "Mesh" or block.kind == "Solid" or block.kind == "Facets" or block.kind == "Terrain" then
         return "mesh"
     end
     if block.kind == "Scene" then
@@ -10540,6 +15149,9 @@ local function declaredCanvasObjectKind(self, block, properties)
     end
     if block.kind == "Light" then
         return "meshLight"
+    end
+    if block.kind == "Ground" then
+        return "meshGround"
     end
     return asString(
         nil,
@@ -10580,6 +15192,9 @@ local function canvasObjectTypeForKind(self, kind)
     if kind == "meshLight" then
         return "meshLight"
     end
+    if kind == "meshGround" then
+        return "meshGround"
+    end
     return "shape"
 end
 function ____exports.classifyCanvasObject(self, block, properties, symbolDefinitions)
@@ -10588,13 +15203,33 @@ function ____exports.classifyCanvasObject(self, block, properties, symbolDefinit
         nil,
         properties:get("shape")
     )
-    local ____t_result_0
-    if __t(nil, shapeReference) then
-        ____t_result_0 = symbolDefinitions:get(shapeReference)
+    local ____temp_0
+    if block.kind == "Shape" or block.kind == "Entity" then
+        ____temp_0 = asString(
+            nil,
+            properties:get("symbol")
+        )
     else
-        ____t_result_0 = nil
+        ____temp_0 = nil
     end
-    local symbol = ____t_result_0
+    local named = ____temp_0
+    local ____t_result_1
+    if __t(nil, named) then
+        ____t_result_1 = symbolDefinitions:get(named)
+    else
+        ____t_result_1 = nil
+    end
+    local ____t_result_1_3 = ____t_result_1
+    if ____t_result_1_3 == nil then
+        local ____t_result_2
+        if __t(nil, shapeReference) then
+            ____t_result_2 = symbolDefinitions:get(shapeReference)
+        else
+            ____t_result_2 = nil
+        end
+        ____t_result_1_3 = ____t_result_2
+    end
+    local symbol = ____t_result_1_3
     return {
         objectType = isComponentBlockKind(nil, block.kind) and "component" or canvasObjectTypeForKind(nil, kind),
         kind = kind,
@@ -10716,6 +15351,7 @@ local ____resolver = require("core.sflSemantic.canvasObjects.artifacts.isometric
 local resolveIsometricObject = ____resolver.resolveIsometricObject
 local ____resolver = require("core.sflSemantic.canvasObjects.artifacts.mesh.resolver")
 local readAnchor = ____resolver.readAnchor
+local resolveMeshGroundObject = ____resolver.resolveMeshGroundObject
 local resolveMeshLightObject = ____resolver.resolveMeshLightObject
 local resolveMeshObject = ____resolver.resolveMeshObject
 local resolveMeshSceneObject = ____resolver.resolveMeshSceneObject
@@ -10805,7 +15441,9 @@ function ____exports.resolveCanvasObject(self, block, origin, context, frameId, 
                 base,
                 block,
                 properties,
-                layoutProp
+                layoutProp,
+                symbolDefs,
+                context.sketchDefs
             )
         end
         ____cond3 = ____cond3 or ____switch3 == "meshScene"
@@ -10814,7 +15452,11 @@ function ____exports.resolveCanvasObject(self, block, origin, context, frameId, 
         end
         ____cond3 = ____cond3 or ____switch3 == "meshLight"
         if ____cond3 then
-            return resolveMeshLightObject(nil, base, properties)
+            return resolveMeshLightObject(nil, base, block, properties)
+        end
+        ____cond3 = ____cond3 or ____switch3 == "meshGround"
+        if ____cond3 then
+            return resolveMeshGroundObject(nil, base, block, properties)
         end
         ____cond3 = ____cond3 or ____switch3 == "meshSurface"
         if ____cond3 then
@@ -10946,9 +15588,13 @@ ____exports.CANVAS_OBJECT_BLOCK_KINDS = {
     "Isometric",
     "Dimension",
     "Mesh",
+    "Solid",
+    "Facets",
+    "Terrain",
     "Canvas",
     "Scene",
-    "Light"
+    "Light",
+    "Ground"
 }
 local canvasObjectBlockKinds = __TS__New(Set, ____exports.CANVAS_OBJECT_BLOCK_KINDS)
 function ____exports.isCanvasObjectBlockKind(self, kind)
@@ -11370,13 +16016,25 @@ return ____exports
 local ____lualib = require("lualib_bundle")
 local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
 local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local Map = ____lualib.Map
 local __TS__ArraySome = ____lualib.__TS__ArraySome
+local __TS__ArrayReduce = ____lualib.__TS__ArrayReduce
 local ____exports = {}
+local ______shims = require("core.__shims")
+local __t = ______shims.__t
+local ____outline = require("core.model.outline.index")
+local combineOutlines = ____outline.combineOutlines
+local ringArea = ____outline.ringArea
+local ____path = require("core.model.path.index")
+local flattenPath = ____path.flattenPath
 local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
 local childBlocks = ____blockEntries.childBlocks
 local directProperties = ____blockEntries.directProperties
+local placementValue = ____blockEntries.placementValue
 local ____valueAccess = require("core.sflSemantic.ast.valueAccess")
 local asNumber = ____valueAccess.asNumber
+local asString = ____valueAccess.asString
 local tupleValues = ____valueAccess.tupleValues
 local function readSymbolPoints(self, block)
     local value = directProperties(nil, block):get("points")
@@ -11417,7 +16075,7 @@ local function readSymbolPorts(self, block)
         function(____, port)
             local position = tupleValues(
                 nil,
-                directProperties(nil, port):get("at")
+                placementValue(nil, port, "position", "at")
             )
             if type(position and position[1]) ~= "number" or type(position[2]) ~= "number" then
                 return {}
@@ -11427,14 +16085,105 @@ local function readSymbolPorts(self, block)
     )
     return #ports > 0 and ports or nil
 end
-function ____exports.readSymbolDefinition(self, block)
-    local ____readSymbolPoints_result_5 = readSymbolPoints(nil, block)
-    local points = ____readSymbolPoints_result_5.points
-    local tensions = ____readSymbolPoints_result_5.tensions
+local function flatRing(self, points, tensions, tension)
+    local curve = __TS__ArrayMap(
+        points,
+        function(____, ____bindingPattern0, index)
+            local y
+            local x
+            x = ____bindingPattern0[1]
+            y = ____bindingPattern0[2]
+            return tensions[index + 1] == nil and ({x = x, y = y}) or ({x = x, y = y, tension = tensions[index + 1]})
+        end
+    )
+    return __TS__ArrayMap(
+        flattenPath(nil, {points = curve, tension = tension, closed = true}),
+        function(____, point) return {point.x, point.y} end
+    )
+end
+local function ringsOf(____, symbol)
+    return symbol.rings or ({flatRing(nil, symbol.points, symbol.pointTensions or ({}), symbol.tension or 0)})
+end
+local function childOutline(self, child, lookup)
+    local properties = directProperties(nil, child)
+    local name = asString(
+        nil,
+        properties:get("symbol")
+    )
+    if not __t(nil, name) then
+        local ____readSymbolPoints_result_5 = readSymbolPoints(nil, child)
+        local points = ____readSymbolPoints_result_5.points
+        local tensions = ____readSymbolPoints_result_5.tensions
+        return #points >= 3 and ({flatRing(
+            nil,
+            points,
+            tensions,
+            asNumber(
+                nil,
+                properties:get("tension")
+            ) or 0
+        )}) or ({})
+    end
+    local other = lookup(nil, name)
+    if not other then
+        return {}
+    end
+    local x, y = table.unpack(
+        tupleValues(
+            nil,
+            placementValue(nil, child, "position", "at")
+        ) or ({}),
+        1,
+        2
+    )
+    if x == nil then
+        x = 0
+    end
+    if y == nil then
+        y = 0
+    end
+    local width, height = table.unpack(
+        tupleValues(
+            nil,
+            placementValue(nil, child, "size")
+        ) or ({}),
+        1,
+        2
+    )
+    if width == nil then
+        width = 1
+    end
+    if height == nil then
+        height = 1
+    end
+    if type(x) ~= "number" or type(y) ~= "number" or type(width) ~= "number" or type(height) ~= "number" then
+        return {}
+    end
+    return __TS__ArrayMap(
+        ringsOf(nil, other),
+        function(____, ring) return __TS__ArrayMap(
+            ring,
+            function(____, ____bindingPattern0)
+                local py
+                local px
+                px = ____bindingPattern0[1]
+                py = ____bindingPattern0[2]
+                return {x + px * width, y + py * height}
+            end
+        ) end
+    )
+end
+function ____exports.readSymbolDefinition(self, block, lookup)
+    if lookup == nil then
+        lookup = function() return nil end
+    end
+    local ____readSymbolPoints_result_6 = readSymbolPoints(nil, block)
+    local points = ____readSymbolPoints_result_6.points
+    local tensions = ____readSymbolPoints_result_6.tensions
     if #points < 2 then
         return nil
     end
-    return {
+    local plain = {
         name = block.name,
         points = points,
         pointTensions = __TS__ArraySome(
@@ -11447,6 +16196,28 @@ function ____exports.readSymbolDefinition(self, block)
         ),
         ports = readSymbolPorts(nil, block)
     }
+    local changes = __TS__ArrayFilter(
+        childBlocks(nil, block),
+        function(____, child) return child.kind == "Cut" or child.kind == "Add" end
+    )
+    if #changes == 0 or #points < 3 then
+        return plain
+    end
+    local outline = ringsOf(nil, plain)
+    for ____, child in ipairs(changes) do
+        local other = childOutline(nil, child, lookup)
+        if #other > 0 then
+            outline = combineOutlines(nil, outline, other, child.kind == "Cut" and "cut" or "add")
+        end
+    end
+    if #outline == 0 then
+        return nil
+    end
+    local largest = __TS__ArrayReduce(
+        outline,
+        function(____, best, ring) return math.abs(ringArea(nil, ring)) > math.abs(ringArea(nil, best)) and ring or best end
+    )
+    return {name = block.name, points = largest, ports = plain.ports, rings = outline}
 end
 return ____exports
  end,
@@ -11455,8 +16226,12 @@ local ____lualib = require("lualib_bundle")
 local __TS__ArrayFind = ____lualib.__TS__ArrayFind
 local Map = ____lualib.Map
 local __TS__New = ____lualib.__TS__New
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local Set = ____lualib.Set
+local __TS__Iterator = ____lualib.__TS__Iterator
 local ____exports = {}
-local projectModel, collectShaderDefinitions, collectStyleDefinitions, collectLayoutDefinitions, collectSymbolDefinitions, findCanvasModel
+local projectModel, collectSketches, collectShaderDefinitions, collectStyleDefinitions, collectLayoutDefinitions, collectSymbolDefinitions, findCanvasModel
 local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
 local childBlocks = ____blockEntries.childBlocks
 local ____shaders = require("core.sflSemantic.definitions.shaders")
@@ -11469,19 +16244,36 @@ function projectModel(self, block)
         function(____, child) return child.kind == "Model" end
     )
 end
+function collectSketches(self, blocks, found)
+    if found == nil then
+        found = __TS__New(Map)
+    end
+    for ____, block in ipairs(blocks) do
+        if block.kind == "Sketch" then
+            found:set(block.name, block)
+        else
+            collectSketches(
+                nil,
+                childBlocks(nil, block),
+                found
+            )
+        end
+    end
+    return found
+end
 function collectShaderDefinitions(self, sflDocument)
     local shaders = __TS__New(Map)
     for ____, block in ipairs(sflDocument.blocks) do
         do
             if block.kind ~= "Shader" then
-                goto __continue6
+                goto __continue11
             end
             local shader = readShaderDefinition(nil, block)
             if shader then
                 shaders:set(block.name, shader)
             end
         end
-        ::__continue6::
+        ::__continue11::
     end
     return shaders
 end
@@ -11505,17 +16297,34 @@ function collectLayoutDefinitions(self, sflDocument)
 end
 function collectSymbolDefinitions(self, sflDocument)
     local symbols = __TS__New(Map)
-    for ____, block in ipairs(sflDocument.blocks) do
-        do
-            if block.kind ~= "Symbol" then
-                goto __continue19
-            end
-            local symbol = readSymbolDefinition(nil, block)
-            if symbol then
-                symbols:set(block.name, symbol)
-            end
+    local blocks = __TS__New(
+        Map,
+        __TS__ArrayMap(
+            __TS__ArrayFilter(
+                sflDocument.blocks,
+                function(____, block) return block.kind == "Symbol" end
+            ),
+            function(____, block) return {block.name, block} end
+        )
+    )
+    local reading = __TS__New(Set)
+    local read
+    read = function(____, name)
+        local known = symbols:get(name)
+        local block = blocks:get(name)
+        if known or not block or reading:has(name) then
+            return known
         end
-        ::__continue19::
+        reading:add(name)
+        local symbol = readSymbolDefinition(nil, block, read)
+        reading:delete(name)
+        if symbol then
+            symbols:set(name, symbol)
+        end
+        return symbol
+    end
+    for ____, name in __TS__Iterator(blocks:keys()) do
+        read(nil, name)
     end
     return symbols
 end
@@ -11538,6 +16347,7 @@ function ____exports.collectCanvasDefinitions(self, sflDocument)
         styles = collectStyleDefinitions(nil, sflDocument),
         layouts = collectLayoutDefinitions(nil, sflDocument),
         symbols = collectSymbolDefinitions(nil, sflDocument),
+        sketches = collectSketches(nil, sflDocument.blocks),
         shaders = collectShaderDefinitions(nil, sflDocument),
         model = findCanvasModel(nil, sflDocument)
     }
@@ -11576,6 +16386,7 @@ do
 end
 do
     local ____object = require("core.sflSemantic.canvasObjects.artifacts.mesh.object")
+    ____exports.isMeshGroundObject = ____object.isMeshGroundObject
     ____exports.isMeshLightObject = ____object.isMeshLightObject
     ____exports.isMeshObject = ____object.isMeshObject
     ____exports.isMeshSceneObject = ____object.isMeshSceneObject
@@ -11599,6 +16410,7 @@ do
     ____exports.isChartObject = ____typedObjects.isChartObject
     ____exports.isDimensionObject = ____typedObjects.isDimensionObject
     ____exports.isIsometricObject = ____typedObjects.isIsometricObject
+    ____exports.isMeshGroundObject = ____typedObjects.isMeshGroundObject
     ____exports.isMeshLightObject = ____typedObjects.isMeshLightObject
     ____exports.isMeshObject = ____typedObjects.isMeshObject
     ____exports.isMeshSceneObject = ____typedObjects.isMeshSceneObject
@@ -11752,6 +16564,7 @@ function ____exports.createCanvasObjectPropertyReaders(self, definitions)
     local styles = ____definitions_0.styles
     local layouts = ____definitions_0.layouts
     local symbols = ____definitions_0.symbols
+    local sketches = ____definitions_0.sketches
     local shaders = ____definitions_0.shaders
     local function references(____, block)
         return classifyCompositionReferences(nil, block.composition, styles, layouts)
@@ -11798,7 +16611,13 @@ function ____exports.createCanvasObjectPropertyReaders(self, definitions)
         end
         return ____t_result_3
     end
-    return {mergedProps = mergedProps, layoutProp = layoutProp, symbolDefs = symbols, shaderDefs = shaders}
+    return {
+        mergedProps = mergedProps,
+        layoutProp = layoutProp,
+        symbolDefs = symbols,
+        sketchDefs = sketches,
+        shaderDefs = shaders
+    }
 end
 return ____exports
  end,
@@ -11957,16 +16776,25 @@ return ____exports
 ["core.sflSemantic.diagnostics.meshes"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayIncludes = ____lualib.__TS__ArrayIncludes
 local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
 local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local __TS__ArraySlice = ____lualib.__TS__ArraySlice
+local Map = ____lualib.Map
+local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
 local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
 local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
 local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
 local ____exports = {}
+local ______shims = require("core.__shims")
+local __t = ______shims.__t
 local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
 local childBlocks = ____blockEntries.childBlocks
 local directProperties = ____blockEntries.directProperties
+local layoutProperties = ____blockEntries.layoutProperties
+local styleProperties = ____blockEntries.styleProperties
+local ____resolver = require("core.sflSemantic.canvasObjects.artifacts.mesh.resolver")
+local EDGE_WORDS_BEFORE = ____resolver.EDGE_WORDS_BEFORE
 local function warning(____, code, ownerId, message)
     return {severity = "warning", code = code, ownerId = ownerId, message = message}
 end
@@ -11992,7 +16820,17 @@ function ____exports.collectMeshProblems(self, sflDocument)
     local outside = __TS__ArrayFlatMap(
         sflDocument.blocks,
         function(____, block)
-            if block.kind == "Mesh" or block.kind == "Scene" or block.kind == "Canvas" or block.kind == "Light" then
+            if __TS__ArrayIncludes({
+                "Mesh",
+                "Solid",
+                "Facets",
+                "Terrain",
+                "Sketch",
+                "Scene",
+                "Canvas",
+                "Light",
+                "Ground"
+            }, block.kind) then
                 return {warning(nil, "mesh-outside-model", block.name, ((block.kind .. " '") .. block.name) .. "' is not drawn: it has to be inside a Model.")}
             end
             if block.kind == "Model" and directProperties(nil, block):has("asset") then
@@ -12010,7 +16848,7 @@ function ____exports.collectMeshProblems(self, sflDocument)
                 ),
                 meshesIn
             ),
-            function(____, mesh) return not directProperties(nil, mesh):has("asset") end
+            function(____, mesh) return not directProperties(nil, mesh):has("asset") and not styleProperties(nil, mesh):has("asset") end
         ),
         function(____, mesh) return warning(nil, "mesh-without-asset", mesh.name, ("Mesh '" .. mesh.name) .. "' has no asset, so there is nothing to draw.") end
     )
@@ -12035,25 +16873,108 @@ function ____exports.collectMeshProblems(self, sflDocument)
                     childBlocks(nil, scene),
                     function(____, child) return child.kind == "Light" end
                 ),
-                1
+                3
             ) end
         ),
-        function(____, light) return warning(nil, "extra-light", light.name, ("Light '" .. light.name) .. "' does nothing: a Scene has one sun, and the first counts.") end
+        function(____, light) return warning(nil, "extra-light", light.name, ("Light '" .. light.name) .. "' does nothing: a Scene has one sun and up to two lights from the side.") end
     )
-    local ____array_0 = __TS__SparseArrayNew(table.unpack(outside))
+    local sketchSizes = __TS__ArrayMap(
+        __TS__ArrayFilter(
+            __TS__ArrayFlatMap(sflDocument.blocks, blocksIn),
+            function(____, block) return block.kind == "Solid" and directProperties(nil, block):has("sketch") and layoutProperties(nil, block):has("size") end
+        ),
+        function(____, solid) return warning(
+            nil,
+            "sketch-solid-size",
+            solid.name,
+            directProperties(nil, solid):has("height") and ("Solid '" .. solid.name) .. "' is made from a Sketch, which gives its width and depth, and height gives its height: size in its layout does nothing." or ("Solid '" .. solid.name) .. "' is made from a Sketch, which gives its width and depth. Its height is read from size in its layout, but is written as height: … now."
+        ) end
+    )
+    local mirrors = __TS__ArrayFlatMap(
+        __TS__ArrayFlatMap(sflDocument.blocks, blocksIn),
+        function(____, block)
+            local own = directProperties(nil, block)
+            if own:has("mirror") and block.kind ~= "Solid" then
+                return {warning(nil, "mirror-not-solid", block.name, ((block.kind .. " '") .. block.name) .. "' has mirror, which makes a twin of a Solid alone: it does nothing here.")}
+            end
+            if own:has("flip") and __TS__ArrayIncludes({"Solid", "Cut", "Add", "Keep"}, block.kind) then
+                return {warning(nil, "flip-written", block.name, ((block.kind .. " '") .. block.name) .. "' writes flip, which is no word of SFL. It still mirrors this block alone and may go; mirror makes a mirrored twin beside it.")}
+            end
+            return {}
+        end
+    )
+    local edgeWords = __TS__ArrayFlatMap(
+        __TS__ArrayFilter(
+            __TS__ArrayFlatMap(sflDocument.blocks, blocksIn),
+            function(____, block) return __TS__ArrayIncludes({"Solid", "Cut", "Add", "Keep"}, block.kind) end
+        ),
+        function(____, block)
+            local own = directProperties(nil, block)
+            local words = __TS__ArrayMap(
+                __TS__ArrayFilter(
+                    __TS__ObjectKeys(EDGE_WORDS_BEFORE),
+                    function(____, word)
+                        local ____opt_0 = own:get(word)
+                        return (____opt_0 and ____opt_0.type) == "list"
+                    end
+                ),
+                function(____, word) return (word .. " is written ") .. EDGE_WORDS_BEFORE[word] end
+            )
+            local edge = own:get("edge")
+            if (edge and edge.type) == "ident" and edge.segments[1] == "round" then
+                words[#words + 1] = "edge: round with chamfer is written fillet"
+            end
+            return __t(nil, #words) and ({warning(
+                nil,
+                "edge-word-before",
+                block.name,
+                ((((block.kind .. " '") .. block.name) .. "': ") .. table.concat(words, ", ")) .. " now. It is still read."
+            )}) or ({})
+        end
+    )
+    local wordsBefore = __TS__ArrayFlatMap(
+        __TS__ArrayFlatMap(sflDocument.blocks, blocksIn),
+        function(____, block)
+            local own = directProperties(nil, block)
+            if block.kind == "Light" and own:has("height") then
+                return {warning(nil, "light-height", block.name, ("Light '" .. block.name) .. "': height is written elevation now, the degrees above the horizon, as height is a length elsewhere. It is still read.")}
+            end
+            if block.kind == "Ground" and own:has("height") then
+                return {warning(nil, "ground-height", block.name, ("Ground '" .. block.name) .. "': height is written as its place now, layout { position: 0, height, 0 }. It is still read.")}
+            end
+            return {}
+        end
+    )
+    local ____array_4 = __TS__SparseArrayNew(table.unpack(outside))
     __TS__SparseArrayPush(
-        ____array_0,
+        ____array_4,
         table.unpack(missing)
     )
     __TS__SparseArrayPush(
-        ____array_0,
+        ____array_4,
         table.unpack(onSurface)
     )
     __TS__SparseArrayPush(
-        ____array_0,
+        ____array_4,
         table.unpack(extraLights)
     )
-    return {__TS__SparseArraySpread(____array_0)}
+    __TS__SparseArrayPush(
+        ____array_4,
+        table.unpack(sketchSizes)
+    )
+    __TS__SparseArrayPush(
+        ____array_4,
+        table.unpack(mirrors)
+    )
+    __TS__SparseArrayPush(
+        ____array_4,
+        table.unpack(edgeWords)
+    )
+    __TS__SparseArrayPush(
+        ____array_4,
+        table.unpack(wordsBefore)
+    )
+    return {__TS__SparseArraySpread(____array_4)}
 end
 return ____exports
  end,
@@ -12124,6 +17045,314 @@ function ____exports.collectDuplicateNames(self, sflDocument)
 end
 return ____exports
  end,
+["core.sflSemantic.diagnostics.placement"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local Map = ____lualib.Map
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local ____exports = {}
+local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
+local childBlocks = ____blockEntries.childBlocks
+local directProperties = ____blockEntries.directProperties
+local ____blockKinds = require("core.sflSemantic.canvasObjects.processing.blockKinds")
+local isCanvasObjectBlockKind = ____blockKinds.isCanvasObjectBlockKind
+local CHART = __TS__New(Set, {
+    "Chart",
+    "Series",
+    "Axis",
+    "Rule",
+    "Band",
+    "Legend",
+    "Mark"
+})
+local PLACED = __TS__New(Set, {
+    "Solid",
+    "Mesh",
+    "Facets",
+    "Terrain",
+    "Canvas",
+    "Group",
+    "Use",
+    "Repeat"
+})
+local KEYS = {
+    "at",
+    "position",
+    "rotation",
+    "scale",
+    "size"
+}
+local function inShape(____, block, parent)
+    return block.kind == "Rect" or block.kind == "Circle" or block.kind == "Port" or (parent and parent.kind) == "Symbol"
+end
+local function readBefore(self, key, block, parent)
+    if key == "position" then
+        return block.kind == "Light"
+    end
+    if key == "at" then
+        return inShape(nil, block, parent)
+    end
+    return key == "size" and inShape(nil, block, parent) and block.kind ~= "Circle" and block.kind ~= "Port"
+end
+local function meansPlace(self, key, block, parent)
+    if (key == "position" or key == "rotation") and (isCanvasObjectBlockKind(nil, block.kind) or PLACED:has(block.kind)) then
+        return true
+    end
+    return readBefore(nil, key, block, parent) or key ~= "at" and PLACED:has(block.kind)
+end
+function ____exports.collectPlacementsOutsideLayout(self, doc)
+    local found = {}
+    local visit
+    visit = function(____, block, parent)
+        local own = directProperties(nil, block)
+        for ____, key in ipairs(CHART:has(block.kind) and ({}) or __TS__ArrayFilter(
+            KEYS,
+            function(____, written) return own:has(written) end
+        )) do
+            do
+                if not meansPlace(nil, key, block, parent) then
+                    goto __continue10
+                end
+                local now = key == "at" and "position" or key
+                found[#found + 1] = {
+                    severity = "warning",
+                    code = "placement-outside-layout",
+                    ownerId = block.name,
+                    message = readBefore(nil, key, block, parent) and ((((((block.kind .. " '") .. block.name) .. "' writes ") .. key) .. " on itself. It is read, but is written in its layout now: layout { ") .. now) .. ": … }." or ((((((block.kind .. " '") .. block.name) .. "' writes ") .. key) .. " on itself, where it does nothing. Write it in its layout: layout { ") .. now) .. ": … }."
+                }
+            end
+            ::__continue10::
+        end
+        for ____, child in ipairs(childBlocks(nil, block)) do
+            visit(nil, child, block)
+        end
+    end
+    for ____, block in ipairs(doc.blocks) do
+        visit(nil, block, nil)
+    end
+    return found
+end
+return ____exports
+ end,
+["core.sflSemantic.diagnostics.properties"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local Map = ____lualib.Map
+local __TS__Spread = ____lualib.__TS__Spread
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local __TS__ArrayIncludes = ____lualib.__TS__ArrayIncludes
+local ____exports = {}
+local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
+local childBlocks = ____blockEntries.childBlocks
+local directProperties = ____blockEntries.directProperties
+local styleProperties = ____blockEntries.styleProperties
+local function blocksIn(self, block)
+    return {
+        block,
+        table.unpack(__TS__ArrayFlatMap(
+            childBlocks(nil, block),
+            blocksIn
+        ))
+    }
+end
+function ____exports.collectPropertiesWrittenTwice(self, sflDocument)
+    return __TS__ArrayFlatMap(
+        __TS__ArrayFlatMap(sflDocument.blocks, blocksIn),
+        function(____, block)
+            local own = directProperties(nil, block)
+            return __TS__ArrayMap(
+                __TS__ArrayFilter(
+                    {__TS__Spread(styleProperties(nil, block):keys())},
+                    function(____, key) return own:has(key) end
+                ),
+                function(____, key) return {severity = "warning", code = "property-twice", ownerId = block.name, message = ((((("'" .. key) .. "' of ") .. block.kind) .. " '") .. block.name) .. "' stands on the block and in its style. The one in the style counts."} end
+            )
+        end
+    )
+end
+local FORM = __TS__New(Set, {
+    "asset",
+    "symbol",
+    "sketch",
+    "loft",
+    "height",
+    "chamfer",
+    "fillet",
+    "chamferEdges",
+    "filletEdges",
+    "chamferTop",
+    "chamferBottom",
+    "filletTop",
+    "filletBottom",
+    "mirror",
+    "taper",
+    "shift",
+    "points",
+    "faces",
+    "thickness",
+    "bevel",
+    "symmetry",
+    "heights",
+    "picture",
+    "anchor",
+    "position",
+    "rotation",
+    "scale",
+    "size",
+    "at"
+})
+local BODIES = __TS__New(Set, {
+    "Solid",
+    "Mesh",
+    "Facets",
+    "Terrain",
+    "Cut",
+    "Add",
+    "Keep",
+    "Light",
+    "Ground",
+    "Canvas",
+    "Group",
+    "Use"
+})
+function ____exports.collectFormInStyle(self, sflDocument)
+    return __TS__ArrayFlatMap(
+        __TS__ArrayFlatMap(sflDocument.blocks, blocksIn),
+        function(____, block) return __TS__ArrayMap(
+            __TS__ArrayFilter(
+                {__TS__Spread(BODIES:has(block.kind) and styleProperties(nil, block):keys() or ({}))},
+                function(____, key) return FORM:has(key) end
+            ),
+            function(____, key) return {
+                severity = "warning",
+                code = "form-in-style",
+                ownerId = block.name,
+                message = ((((((("'" .. key) .. "' of ") .. block.kind) .. " '") .. block.name) .. "' stands in its style, which says how it looks. It says what it is: write it on the block") .. (__TS__ArrayIncludes({
+                    "position",
+                    "rotation",
+                    "scale",
+                    "size",
+                    "at"
+                }, key) and ", in its layout" or "")) .. ". It is still read."
+            } end
+        ) end
+    )
+end
+return ____exports
+ end,
+["core.sflSemantic.diagnostics.references"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local Set = ____lualib.Set
+local __TS__New = ____lualib.__TS__New
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local Map = ____lualib.Map
+local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
+local __TS__ArrayConcat = ____lualib.__TS__ArrayConcat
+local ____exports = {}
+local ____blockEntries = require("core.sflSemantic.ast.blockEntries")
+local childBlocks = ____blockEntries.childBlocks
+local directProperties = ____blockEntries.directProperties
+local blocksIn
+blocksIn = function(____, block) return {
+    block,
+    table.unpack(__TS__ArrayFlatMap(
+        childBlocks(nil, block),
+        blocksIn
+    ))
+} end
+local function nameOf(____, value)
+    return (value and value.type) == "ident" and #value.segments == 1 and value.segments[1] or nil
+end
+local OUTLINED = __TS__New(Set, {
+    "Solid",
+    "Cut",
+    "Add",
+    "Keep",
+    "Isometric",
+    "Shape",
+    "Entity"
+})
+local BODIES = __TS__New(Set, {"Mesh", "Solid", "Facets", "Terrain"})
+function ____exports.collectUnknownReferences(self, doc)
+    local all = __TS__ArrayFlatMap(doc.blocks, blocksIn)
+    local function named(____, kinds)
+        return __TS__New(
+            Set,
+            __TS__ArrayMap(
+                __TS__ArrayFilter(
+                    all,
+                    function(____, block)
+                        local ____temp_2
+                        if type(kinds) == "string" then
+                            ____temp_2 = block.kind == kinds
+                        else
+                            ____temp_2 = kinds:has(block.kind)
+                        end
+                        return ____temp_2
+                    end
+                ),
+                function(____, block) return block.name end
+            )
+        )
+    end
+    local known = {
+        sketch = named(nil, "Sketch"),
+        symbol = named(nil, "Symbol"),
+        loft = named(nil, "Symbol"),
+        anchor = named(nil, BODIES),
+        picture = named(nil, "Canvas")
+    }
+    local what = {
+        sketch = "Sketch",
+        symbol = "Symbol",
+        loft = "Symbol",
+        anchor = "body",
+        picture = "Canvas"
+    }
+    local shapeAsSymbol = __TS__ArrayFlatMap(
+        all,
+        function(____, block)
+            local name = nameOf(
+                nil,
+                directProperties(nil, block):get("shape")
+            )
+            return (block.kind == "Shape" or block.kind == "Entity") and name ~= nil and known.symbol:has(name) and ({{severity = "warning", code = "shape-names-symbol", ownerId = block.name, message = ((((((block.kind .. " '") .. block.name) .. "' names the Symbol '") .. name) .. "' in shape. It is drawn, but is written symbol: ") .. name) .. " now; shape names a form that is built in."}}) or ({})
+        end
+    )
+    return __TS__ArrayConcat(
+        shapeAsSymbol,
+        __TS__ArrayFlatMap(
+            all,
+            function(____, block)
+                local properties = directProperties(nil, block)
+                return __TS__ArrayFlatMap(
+                    __TS__ObjectKeys(known),
+                    function(____, key)
+                        if (key == "symbol" or key == "loft") and not OUTLINED:has(block.kind) then
+                            return {}
+                        end
+                        local name = nameOf(
+                            nil,
+                            properties:get(key)
+                        )
+                        if name == nil or known[key]:has(name) then
+                            return {}
+                        end
+                        return {{severity = "warning", code = "unknown-reference", ownerId = block.name, message = ((((((((block.kind .. " '") .. block.name) .. "' names the ") .. what[key]) .. " '") .. name) .. "' in ") .. key) .. ", and there is none of that name."}}
+                    end
+                )
+            end
+        )
+    )
+end
+return ____exports
+ end,
 ["core.sflSemantic.diagnostics.screens"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local __TS__StringSplit = ____lualib.__TS__StringSplit
@@ -12177,6 +17406,7 @@ return ____exports
  end,
 ["core.sflSemantic.canvasState.resolution"] = function(...) 
 local ____lualib = require("lualib_bundle")
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
 local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
 local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
@@ -12197,6 +17427,13 @@ local ____meshes = require("core.sflSemantic.diagnostics.meshes")
 local collectMeshProblems = ____meshes.collectMeshProblems
 local ____names = require("core.sflSemantic.diagnostics.names")
 local collectDuplicateNames = ____names.collectDuplicateNames
+local ____placement = require("core.sflSemantic.diagnostics.placement")
+local collectPlacementsOutsideLayout = ____placement.collectPlacementsOutsideLayout
+local ____properties = require("core.sflSemantic.diagnostics.properties")
+local collectFormInStyle = ____properties.collectFormInStyle
+local collectPropertiesWrittenTwice = ____properties.collectPropertiesWrittenTwice
+local ____references = require("core.sflSemantic.diagnostics.references")
+local collectUnknownReferences = ____references.collectUnknownReferences
 local ____screens = require("core.sflSemantic.diagnostics.screens")
 local collectModelScreenLines = ____screens.collectModelScreenLines
 function ____exports.createCanvasResolution(self, doc)
@@ -12230,6 +17467,29 @@ function ____exports.createCanvasResolution(self, doc)
     __TS__SparseArrayPush(
         ____array_0,
         table.unpack(collectMeshProblems(nil, doc))
+    )
+    __TS__SparseArrayPush(
+        ____array_0,
+        table.unpack(collectPropertiesWrittenTwice(nil, doc))
+    )
+    __TS__SparseArrayPush(
+        ____array_0,
+        table.unpack(collectFormInStyle(nil, doc))
+    )
+    __TS__SparseArrayPush(
+        ____array_0,
+        table.unpack(collectUnknownReferences(nil, doc))
+    )
+    __TS__SparseArrayPush(
+        ____array_0,
+        table.unpack(collectPlacementsOutsideLayout(nil, doc))
+    )
+    __TS__SparseArrayPush(
+        ____array_0,
+        table.unpack(__TS__ArrayMap(
+            doc.notes or ({}),
+            function(____, note) return {severity = "warning", code = note.code, ownerId = note.owner, message = note.message} end
+        ))
     )
     return {
         model = ____definitions_model_1,
@@ -12645,6 +17905,7 @@ do
     ____exports.isChartObject = ____types.isChartObject
     ____exports.isDimensionObject = ____types.isDimensionObject
     ____exports.isIsometricObject = ____types.isIsometricObject
+    ____exports.isMeshGroundObject = ____types.isMeshGroundObject
     ____exports.isMeshLightObject = ____types.isMeshLightObject
     ____exports.isMeshObject = ____types.isMeshObject
     ____exports.isMeshSceneObject = ____types.isMeshSceneObject
@@ -14292,6 +19553,8 @@ function ____exports.meshObject(self, canvasObject, scenes)
     local opacity = ____canvasObject_mesh_0.opacity
     local roughness = ____canvasObject_mesh_0.roughness
     local metallic = ____canvasObject_mesh_0.metallic
+    local transmission = ____canvasObject_mesh_0.transmission
+    local ior = ____canvasObject_mesh_0.ior
     local position = ____canvasObject_mesh_0.position
     local rotation = ____canvasObject_mesh_0.rotation
     local scale = ____canvasObject_mesh_0.scale
@@ -14304,6 +19567,8 @@ function ____exports.meshObject(self, canvasObject, scenes)
         opacity = opacity or 1,
         roughness = roughness,
         metallic = metallic,
+        transmission = transmission,
+        ior = ior,
         position = position,
         rotation = rotation,
         scale = scale,
@@ -14398,6 +19663,15 @@ function ____exports.meshSceneObject(self, canvasObject)
     local height = ____canvasObject_1.height
     local order = ____canvasObject_1.order
     local meshScene = ____canvasObject_1.meshScene
+    local ____meshScene_2 = meshScene
+    local orbit = ____meshScene_2.orbit
+    local zoom = ____meshScene_2.zoom
+    local shadow = ____meshScene_2.shadow
+    local environment = ____meshScene_2.environment
+    local environmentTurn = ____meshScene_2.environmentTurn
+    local exposure = ____meshScene_2.exposure
+    local haze = ____meshScene_2.haze
+    local hazeColor = ____meshScene_2.hazeColor
     return {
         id = id,
         x = x,
@@ -14405,8 +19679,14 @@ function ____exports.meshSceneObject(self, canvasObject)
         width = width,
         height = height,
         order = order,
-        orbit = meshScene.orbit,
-        shadow = meshScene.shadow
+        orbit = orbit,
+        zoom = zoom,
+        shadow = shadow,
+        environment = environment,
+        environmentTurn = environmentTurn,
+        exposure = exposure,
+        haze = haze,
+        hazeColor = hazeColor
     }
 end
 return ____exports
@@ -14696,6 +19976,7 @@ local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local __TS__New = ____lualib.__TS__New
 local Set = ____lualib.Set
 local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayFind = ____lualib.__TS__ArrayFind
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
 local ____exports = {}
@@ -14704,6 +19985,7 @@ local __sort = ______shims.__sort
 local ____sflToCanvasState = require("core.sflSemantic.sflToCanvasState")
 local isDimensionObject = ____sflToCanvasState.isDimensionObject
 local isIsometricObject = ____sflToCanvasState.isIsometricObject
+local isMeshGroundObject = ____sflToCanvasState.isMeshGroundObject
 local isMeshLightObject = ____sflToCanvasState.isMeshLightObject
 local isMeshObject = ____sflToCanvasState.isMeshObject
 local isMeshSceneObject = ____sflToCanvasState.isMeshSceneObject
@@ -14798,7 +20080,17 @@ function ____exports.collectCanvasObjects(self, state)
         ),
         meshScenes = __TS__ArrayMap(
             __TS__ArrayFilter(canvasObjects, isMeshSceneObject),
-            meshSceneObject
+            function(____, scene)
+                local ground = __TS__ArrayFind(
+                    __TS__ArrayFilter(canvasObjects, isMeshGroundObject),
+                    function(____, object) return object.parentFrameId == scene.id end
+                )
+                return __TS__ObjectAssign(
+                    {},
+                    meshSceneObject(nil, scene),
+                    {ground = ground and __TS__ObjectAssign({id = ground.id}, ground.meshGround)}
+                )
+            end
         ),
         meshSurfaces = meshSurfaces(nil, canvasObjects, sceneIds),
         meshLights = __TS__ArrayMap(
@@ -15231,10 +20523,10 @@ local ____collect = require("core.renderInput.fromSfl.canvasObjects.collect")
 local collectCanvasObjects = ____collect.collectCanvasObjects
 local ____links = require("core.renderInput.fromSfl.links")
 local createRenderInputLinks = ____links.createRenderInputLinks
-function ____exports.documentToRenderInput(self, doc)
+function ____exports.documentToRenderInput(self, doc, tables)
     local state = resolveCanvasState(
         nil,
-        expandDocument(nil, doc)
+        expandDocument(nil, doc, tables)
     )
     local canvasObjects = collectCanvasObjects(nil, state)
     return {
@@ -20002,6 +25294,9 @@ local buildExtruded = ____extruded.buildExtruded
 local ____sphere = require("core.renderScene.artifacts.isometric.sphere")
 local buildSphere = ____sphere.buildSphere
 function ____exports.buildIsometricObject(self, object, index)
+    if not (object.width > 0) and not (object.height > 0) and not (object.depth > 0) then
+        return {}
+    end
     if object.form == "sphere" then
         return buildSphere(nil, object, index)
     end
@@ -22265,7 +27560,7 @@ return ____exports
 local ____lualib = require("lualib_bundle")
 local __TS__ArraySome = ____lualib.__TS__ArraySome
 local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
-local __TS__ArrayFind = ____lualib.__TS__ArrayFind
+local __TS__ArraySlice = ____lualib.__TS__ArraySlice
 local __TS__SparseArrayNew = ____lualib.__TS__SparseArrayNew
 local __TS__SparseArrayPush = ____lualib.__TS__SparseArrayPush
 local __TS__SparseArraySpread = ____lualib.__TS__SparseArraySpread
@@ -22295,6 +27590,10 @@ function ____exports.buildMeshStages(self, meshes, canvases, anchors, surfaces, 
                 meshes,
                 function(____, mesh) return (mesh.sceneId or DEFAULT_MESH_SCENE.id) == canvas.id end
             )
+            local inScene = __TS__ArrayFilter(
+                lights,
+                function(____, light) return (light.sceneId or DEFAULT_MESH_SCENE.id) == canvas.id end
+            )
             local ____canvas_0 = canvas
             local id = ____canvas_0.id
             local x = ____canvas_0.x
@@ -22302,7 +27601,14 @@ function ____exports.buildMeshStages(self, meshes, canvases, anchors, surfaces, 
             local width = ____canvas_0.width
             local height = ____canvas_0.height
             local orbit = ____canvas_0.orbit
+            local zoom = ____canvas_0.zoom
             local shadow = ____canvas_0.shadow
+            local environment = ____canvas_0.environment
+            local environmentTurn = ____canvas_0.environmentTurn
+            local exposure = ____canvas_0.exposure
+            local haze = ____canvas_0.haze
+            local hazeColor = ____canvas_0.hazeColor
+            local ground = ____canvas_0.ground
             return {
                 type = "mesh-stage",
                 id = "mesh-stage-" .. id,
@@ -22314,12 +27620,17 @@ function ____exports.buildMeshStages(self, meshes, canvases, anchors, surfaces, 
                 height = height,
                 stageId = id,
                 orbit = orbit,
+                zoom = zoom,
                 shadow = shadow,
+                environment = environment,
+                environmentTurn = environmentTurn,
+                exposure = exposure,
+                haze = haze,
+                hazeColor = hazeColor,
+                ground = ground,
                 meshes = own,
-                light = __TS__ArrayFind(
-                    lights,
-                    function(____, light) return (light.sceneId or DEFAULT_MESH_SCENE.id) == canvas.id end
-                ),
+                light = inScene[1],
+                sideLights = #inScene > 1 and __TS__ArraySlice(inScene, 1) or nil,
                 surfaces = __TS__ArrayFilter(
                     surfaces,
                     function(____, surface) return (surface.sceneId or DEFAULT_MESH_SCENE.id) == canvas.id end
@@ -23136,22 +28447,34 @@ function ____exports.renderSymbol(self, context)
         return ____exports.renderRectangle(nil, context)
     end
     local tension = finite(nil, context.shape.symbol.tension, 0)
-    local points = __TS__ArrayMap(
-        context.shape.symbol.points,
-        function(____, ____bindingPattern0)
-            local y
-            local x
-            x = ____bindingPattern0[1]
-            y = ____bindingPattern0[2]
-            return {x = context.x + x * context.width, y = context.y + y * context.height}
-        end
-    )
+    local function place(____, ____bindingPattern0)
+        local y
+        local x
+        x = ____bindingPattern0[1]
+        y = ____bindingPattern0[2]
+        return {x = context.x + x * context.width, y = context.y + y * context.height}
+    end
+    local points = __TS__ArrayMap(context.shape.symbol.points, place)
+    local rings = context.shape.symbol.rings
     return {__TS__ObjectAssign(
         {},
         shapeNodeBase(nil, context),
         {
             type = "path",
-            d = freeformPathData(nil, {points = points, tension = tension, closed = true}),
+            d = rings and table.concat(
+                __TS__ArrayMap(
+                    rings,
+                    function(____, ring) return freeformPathData(
+                        nil,
+                        {
+                            points = __TS__ArrayMap(ring, place),
+                            tension = 0,
+                            closed = true
+                        }
+                    ) end
+                ),
+                " "
+            ) or freeformPathData(nil, {points = points, tension = tension, closed = true}),
             rotationCenter = context.rotationCenter,
             detail = {of = "symbolGeometry", points = context.shape.symbol.points, tension = tension, declaredBounds = {x = context.x, y = context.y, width = context.width, height = context.height}}
         }
@@ -23262,12 +28585,78 @@ return ____exports
 local ____lualib = require("lualib_bundle")
 local Set = ____lualib.Set
 local __TS__New = ____lualib.__TS__New
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local ____exports = {}
+local shapeOutline
 local ______shims = require("core.__shims")
 local __t = ______shims.__t
 local ____scene = require("core.renderScene.scene.index")
+local freeformPathData = ____scene.freeformPathData
 local rotatedBounds = ____scene.rotatedBounds
+local ____pathCalculation = require("core.renderScene.artifacts.shape.geometry.pathCalculation")
+local localShapePath = ____pathCalculation.localShapePath
+function shapeOutline(self, context)
+    local ____context_0 = context
+    local x = ____context_0.x
+    local y = ____context_0.y
+    local width = ____context_0.width
+    local height = ____context_0.height
+    local ____type = context.shape.shapeType
+    if ____type == "circle" or ____type == "oval" then
+        local rx = width / 2
+        local ry = height / 2
+        local cy = y + ry
+        return {
+            type = "path",
+            d = ((((((((((((((((((("M " .. tostring(x)) .. " ") .. tostring(cy)) .. " A ") .. tostring(rx)) .. " ") .. tostring(ry)) .. " 0 1 0 ") .. tostring(x + width)) .. " ") .. tostring(cy)) .. " A ") .. tostring(rx)) .. " ") .. tostring(ry)) .. " 0 1 0 ") .. tostring(x)) .. " ") .. tostring(cy)) .. " Z"
+        }
+    end
+    if ____type == "symbol" then
+        local symbol = context.shape.symbol
+        if not symbol or #symbol.points < 3 then
+            return nil
+        end
+        local function place(____, ____bindingPattern0)
+            local py
+            local px
+            px = ____bindingPattern0[1]
+            py = ____bindingPattern0[2]
+            return {x = x + px * width, y = y + py * height}
+        end
+        local d = symbol.rings and table.concat(
+            __TS__ArrayMap(
+                symbol.rings,
+                function(____, ring) return freeformPathData(
+                    nil,
+                    {
+                        points = __TS__ArrayMap(ring, place),
+                        tension = 0,
+                        closed = true
+                    }
+                ) end
+            ),
+            " "
+        ) or freeformPathData(
+            nil,
+            {
+                points = __TS__ArrayMap(symbol.points, place),
+                tension = symbol.tension or 0,
+                closed = true
+            }
+        )
+        return {type = "path", d = d}
+    end
+    local d = localShapePath(
+        nil,
+        ____type,
+        x,
+        y,
+        width,
+        height
+    )
+    return __t(nil, d) and ({type = "path", d = d}) or nil
+end
 local RECT_PROGRAMS = __TS__New(Set, {
     "reactivePanel",
     "ledMatrix",
@@ -23278,15 +28667,31 @@ local RECT_PROGRAMS = __TS__New(Set, {
     "horizonGlow",
     "lightStreaks",
     "pulseLine",
-    "glassRefraction"
+    "glassRefraction",
+    "grain",
+    "worn",
+    "cityMap"
 })
-local FILLING_PROGRAMS = __TS__New(Set, {"horizonGlow", "lightStreaks"})
+local FILLING_PROGRAMS = __TS__New(Set, {
+    "horizonGlow",
+    "lightStreaks",
+    "grain",
+    "worn",
+    "cityMap"
+})
+local function fillsRectangle(____, context)
+    return Boolean(
+        nil,
+        context.shape.shader and RECT_PROGRAMS:has(context.shape.shader.program)
+    )
+end
 local function shaderMask(self, context)
-    if context.shape.shapeType == "circle" or context.shape.shapeType == "oval" then
+    local ____type = context.shape.shapeType
+    if (____type == "circle" or ____type == "oval") and not fillsRectangle(nil, context) then
         return "ellipse"
     end
-    local rectangular = context.shape.shapeType == "rectangle" or context.shape.shapeType == "rounded_rectangle"
-    if rectangular and context.shape.shader and RECT_PROGRAMS:has(context.shape.shader.program) then
+    local rectangular = ____type == "rectangle" or ____type == "rounded_rectangle"
+    if (rectangular or shapeOutline(nil, context)) and fillsRectangle(nil, context) then
         return "rect"
     end
     return nil
@@ -23301,28 +28706,33 @@ function ____exports.renderShapeShaderSurface(self, context)
     end
     local padding = mask == "rect" and math.max(0, context.shape.shader.surfacePadding or 0) or 0
     local surfaceBounds = {x = context.x - padding, y = context.y - padding, width = context.width + padding * 2, height = context.height + padding * 2}
-    local ____temp_2 = context.id .. "-shader"
-    local ____context_order_3 = context.order
-    local ____rotatedBounds_result_4 = rotatedBounds(nil, surfaceBounds, context.rotation, 0)
-    local ____context_rotation_5 = context.rotation
-    local ____temp_6 = mask == "rect" and context.shape.shader.program == "glassRefraction" and __TS__ObjectAssign(
+    local ____temp_4 = context.id .. "-shader"
+    local ____context_order_5 = context.order
+    local ____rotatedBounds_result_6 = rotatedBounds(nil, surfaceBounds, context.rotation, 0)
+    local ____context_rotation_7 = context.rotation
+    local ____temp_8 = mask == "rect" and context.shape.shader.program == "glassRefraction" and __TS__ObjectAssign(
         {},
         context.shape.shader,
         {parameters = __TS__ObjectAssign({panel = 1, cornerRadius = context.shape.shapeType == "rounded_rectangle" and (context.shape.cornerRadius or 8) or 0}, context.shape.shader.parameters)}
     ) or context.shape.shader
-    local ____mask_7 = mask
-    local ____opt_0 = context.style.fill
-    return __TS__ObjectAssign(
-        {id = ____temp_2, type = "shader-surface", order = ____context_order_3, bounds = ____rotatedBounds_result_4},
-        surfaceBounds,
-        {
-            rotation = ____context_rotation_5,
-            shader = ____temp_6,
-            mask = ____mask_7,
-            fillColor = (____opt_0 and ____opt_0.kind) == "solid" and context.style.fill.color or nil,
-            cornerRadius = context.shape.shapeType == "rounded_rectangle" and FILLING_PROGRAMS:has(context.shape.shader.program) and (context.shape.cornerRadius or 8) or nil
-        }
-    )
+    local ____mask_9 = mask
+    local ____opt_1 = context.style.fill
+    local ____temp_10 = (____opt_1 and ____opt_1.kind) == "solid" and context.style.fill.color or nil
+    local ____temp_11 = context.shape.shapeType == "rounded_rectangle" and FILLING_PROGRAMS:has(context.shape.shader.program) and (context.shape.cornerRadius or 8) or nil
+    local ____fillsRectangle_result_3
+    if fillsRectangle(nil, context) then
+        ____fillsRectangle_result_3 = shapeOutline(nil, context)
+    else
+        ____fillsRectangle_result_3 = nil
+    end
+    return __TS__ObjectAssign({id = ____temp_4, type = "shader-surface", order = ____context_order_5, bounds = ____rotatedBounds_result_6}, surfaceBounds, {
+        rotation = ____context_rotation_7,
+        shader = ____temp_8,
+        mask = ____mask_9,
+        fillColor = ____temp_10,
+        cornerRadius = ____temp_11,
+        clip = ____fillsRectangle_result_3
+    })
 end
 return ____exports
  end,
@@ -37333,6 +42743,9 @@ end
 function SvgDefinitionRegistry.prototype.clip(self, style)
     return self.clips:clip(style)
 end
+function SvgDefinitionRegistry.prototype.clipArea(self, clip)
+    return self.clips:define(clip)
+end
 return ____exports
  end,
 ["core.svg.domContract.version"] = function(...) 
@@ -38034,6 +43447,7 @@ local function shaderSurfaceSvg(self, node, defs)
     local surfacePadding = node.shader.surfacePadding or 0
     local fillColor = __t(nil, node.fillColor) and (" data-sf-shader-fill=\"" .. xml(nil, node.fillColor)) .. "\"" or ""
     local corners = __t(nil, node.cornerRadius) and (";border-radius:" .. num(nil, node.cornerRadius)) .. "px" or ""
+    local clip = node.clip and (" clip-path=\"url(#" .. defs:clipArea(node.clip)) .. ")\"" or ""
     local ____temp_3 = defs:elementId(node.id)
     local ____contractAttrs_result_4 = contractAttrs(nil, node)
     local ____xml_result_5 = xml(nil, node.shader.program)
@@ -38049,7 +43463,7 @@ local function shaderSurfaceSvg(self, node, defs)
         local ____opt_0 = node.identity
         ____temp_2 = (____opt_0 and ____opt_0.role) == "widget"
     end
-    return ((((((((((((((((((((((((((((("<foreignObject id=\"" .. ____temp_3) .. "\"") .. ____contractAttrs_result_4) .. " data-sf-shader=\"") .. ____xml_result_5) .. "\" data-sf-shader-name=\"") .. ____xml_result_6) .. "\" data-sf-shader-params=\"") .. parameters) .. "\" data-sf-shader-mask=\"") .. ____node_mask_7) .. "\" data-sf-shader-padding=\"") .. ____num_result_8) .. "\"") .. fillColor) .. " x=\"") .. ____num_result_9) .. "\" y=\"") .. ____num_result_10) .. "\" width=\"") .. ____num_result_11) .. "\" height=\"") .. ____num_result_12) .. "\"") .. rotation) .. " pointer-events=\"") .. (____temp_2 and "all" or "none")) .. "\"><canvas xmlns=\"http://www.w3.org/1999/xhtml\" data-sf-shader-canvas=\"true\" style=\"display:block;width:100%;height:100%;pointer-events:none") .. corners) .. "\"></canvas></foreignObject>"
+    return (((((((((((((((((((((((((((((("<foreignObject id=\"" .. ____temp_3) .. "\"") .. ____contractAttrs_result_4) .. " data-sf-shader=\"") .. ____xml_result_5) .. "\" data-sf-shader-name=\"") .. ____xml_result_6) .. "\" data-sf-shader-params=\"") .. parameters) .. "\" data-sf-shader-mask=\"") .. ____node_mask_7) .. "\" data-sf-shader-padding=\"") .. ____num_result_8) .. "\"") .. fillColor) .. clip) .. " x=\"") .. ____num_result_9) .. "\" y=\"") .. ____num_result_10) .. "\" width=\"") .. ____num_result_11) .. "\" height=\"") .. ____num_result_12) .. "\"") .. rotation) .. " pointer-events=\"") .. (____temp_2 and "all" or "none")) .. "\"><canvas xmlns=\"http://www.w3.org/1999/xhtml\" data-sf-shader-canvas=\"true\" style=\"display:block;width:100%;height:100%;pointer-events:none") .. corners) .. "\"></canvas></foreignObject>"
 end
 local function rollingDigitSvg(self, character, node)
     local style = node.componentStyle
@@ -38086,8 +43500,16 @@ local function meshStageSvg(self, node, defs)
             {
                 id = node.stageId,
                 orbit = node.orbit,
+                zoom = node.zoom,
                 shadow = node.shadow,
+                environment = node.environment,
+                environmentTurn = node.environmentTurn,
+                exposure = node.exposure,
+                haze = node.haze,
+                hazeColor = node.hazeColor,
+                ground = node.ground,
                 light = node.light,
+                sideLights = node.sideLights,
                 meshes = node.meshes,
                 surfaces = __TS__ArrayMap(
                     node.surfaces,
@@ -38364,37 +43786,6 @@ function ____exports.createDataSource(self, initial)
             return function() return listeners:delete(listener) end
         end
     }
-end
-return ____exports
- end,
-["core.binding.checkData"] = function(...) 
-local ____lualib = require("lualib_bundle")
-local __TS__TypeOf = ____lualib.__TS__TypeOf
-local __TS__ArrayIsArray = ____lualib.__TS__ArrayIsArray
-local __TS__NumberIsInteger = ____lualib.__TS__NumberIsInteger
-local __TS__ObjectEntries = ____lualib.__TS__ObjectEntries
-local ____exports = {}
-local function typeOfValue(____, value)
-    return (type(value) == "number" or type(value) == "string" or type(value) == "boolean") and __TS__TypeOf(value) or "other"
-end
-function ____exports.checkData(self, contract, data)
-    local rows = __TS__ArrayIsArray(data) and data or ({data})
-    if contract.mode == "table" ~= __TS__ArrayIsArray(data) then
-        return ((((("DataSource '" .. contract.name) .. "' is a ") .. contract.mode) .. " source but delivered ") .. (__TS__ArrayIsArray(data) and "rows" or "a record")) .. "."
-    end
-    for ____, row in ipairs(rows) do
-        for ____, ____value in ipairs(__TS__ObjectEntries(contract.fields)) do
-            local field = ____value[1]
-            local ____type = ____value[2]
-            if typeOfValue(nil, row[field]) ~= ____type then
-                return ((((((("'" .. contract.name) .. ".") .. field) .. "' should be ") .. contract.declared[field]) .. ", got ") .. typeOfValue(nil, row[field])) .. "."
-            end
-            if contract.declared[field] == "int" and not __TS__NumberIsInteger(row[field]) then
-                return ((((("'" .. contract.name) .. ".") .. field) .. "' should be a whole number (int), got ") .. tostring(row[field])) .. "."
-            end
-        end
-    end
-    return nil
 end
 return ____exports
  end,
@@ -39339,6 +44730,7 @@ return ____exports
 ["core.binding.componentBinding"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local Map = ____lualib.Map
+local __TS__ArrayIncludes = ____lualib.__TS__ArrayIncludes
 local ____exports = {}
 local ______shims = require("core.__shims")
 local __t = ______shims.__t
@@ -39413,6 +44805,9 @@ function ____exports.twoWayTargetProblem(self, key, expr, contracts)
     if not target or (contract and contract.mode) ~= "record" or not __t(nil, contract.fields[target[2]]) then
         return ("'<->' on '" .. key) .. "' has to name one field of a record DataSource, as in <DataSource>.<field>."
     end
+    if contract.writable and not __TS__ArrayIncludes(contract.writable, target[2]) then
+        return ((((("'<->' on '" .. key) .. "' writes '") .. table.concat(target, ".")) .. "', which DataSource '") .. target[1]) .. "' does not list as writable."
+    end
     return nil
 end
 return ____exports
@@ -39421,15 +44816,54 @@ return ____exports
 local ____lualib = require("lualib_bundle")
 local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
 local __TS__ArrayFind = ____lualib.__TS__ArrayFind
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayEntries = ____lualib.__TS__ArrayEntries
+local __TS__Iterator = ____lualib.__TS__Iterator
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
 local Map = ____lualib.Map
 local __TS__New = ____lualib.__TS__New
 local ____exports = {}
+local identOf, writableFields
 local ______shims = require("core.__shims")
 local __t = ______shims.__t
 local ____types = require("core.binding.types")
 local scalarOf = ____types.scalarOf
-local function identOf(self, value)
+function identOf(self, value)
     return (value and value.type) == "ident" and table.concat(value.segments, ".") or nil
+end
+function writableFields(self, contract, value, diagnostics)
+    local function report(____, message)
+        local ____temp_7 = #diagnostics + 1
+        diagnostics[____temp_7] = {
+            severity = "error",
+            code = "writable-list",
+            message = message,
+            line = 0,
+            col = 0
+        }
+        return ____temp_7
+    end
+    if value.type ~= "list" then
+        report(nil, ("'writable' of DataSource '" .. contract.name) .. "' is a list of its fields, as in writable: [offset, gain].")
+        return {}
+    end
+    local names = __TS__ArrayMap(value.values, identOf)
+    for ____, ____value in __TS__Iterator(__TS__ArrayEntries(names)) do
+        local index = ____value[1]
+        local name = ____value[2]
+        if name == nil then
+            report(
+                nil,
+                ((("'writable' of DataSource '" .. contract.name) .. "' holds something that is not the name of a field, at place ") .. tostring(index + 1)) .. "."
+            )
+        elseif not __t(nil, contract.fields[name]) then
+            report(nil, ((("'writable' of DataSource '" .. contract.name) .. "' names '") .. name) .. "', which is not one of its fields.")
+        end
+    end
+    return __TS__ArrayFilter(
+        names,
+        function(____, name) return name ~= nil end
+    )
 end
 local function readContract(self, block, diagnostics)
     local properties = __TS__ArrayFlatMap(
@@ -39443,6 +44877,11 @@ local function readContract(self, block, diagnostics)
     )
     local mode = ____identOf_4(nil, ____opt_2 and ____opt_2.value) == "record" and "record" or "table"
     local contract = {name = block.name, mode = mode, fields = {}, declared = {}}
+    local ____opt_5 = __TS__ArrayFind(
+        properties,
+        function(____, property) return property.key == "writable" end
+    )
+    local writable = ____opt_5 and ____opt_5.value
     for ____, entry in ipairs(block.entries) do
         if entry.type == "fields" then
             for ____, field in ipairs(entry.fields) do
@@ -39462,6 +44901,9 @@ local function readContract(self, block, diagnostics)
                 end
             end
         end
+    end
+    if writable then
+        contract.writable = writableFields(nil, contract, writable, diagnostics)
     end
     return contract
 end
@@ -39547,6 +44989,22 @@ local PLACE = {
     height = "number",
     visible = "boolean"
 }
+local MESH = {
+    color = "string",
+    opacity = "number",
+    roughness = "number",
+    metallic = "number",
+    positionX = "number",
+    positionY = "number",
+    positionZ = "number",
+    rotationX = "number",
+    rotationY = "number",
+    rotationZ = "number",
+    scale = "number",
+    scaleX = "number",
+    scaleY = "number",
+    scaleZ = "number"
+}
 ____exports.BINDABLE_PROPERTIES = {
     Chart = {categories = {list = "string"}, text = "string"},
     Series = {values = {list = "number"}, label = "string"},
@@ -39561,6 +45019,7 @@ ____exports.BINDABLE_PROPERTIES = {
     Path = {stroke = "string", opacity = "number", visible = "boolean"},
     Light = {
         turn = "number",
+        elevation = "number",
         height = "number",
         color = "string",
         intensity = "number",
@@ -39578,22 +45037,10 @@ ____exports.BINDABLE_PROPERTIES = {
         scaleY = "number",
         scaleZ = "number"
     },
-    Mesh = {
-        color = "string",
-        opacity = "number",
-        roughness = "number",
-        metallic = "number",
-        positionX = "number",
-        positionY = "number",
-        positionZ = "number",
-        rotationX = "number",
-        rotationY = "number",
-        rotationZ = "number",
-        scale = "number",
-        scaleX = "number",
-        scaleY = "number",
-        scaleZ = "number"
-    },
+    Mesh = MESH,
+    Solid = MESH,
+    Facets = MESH,
+    Terrain = MESH,
     Text = __TS__ObjectAssign({text = "string", textColor = "string", opacity = "number"}, PLACE)
 }
 return ____exports
@@ -39644,6 +45091,15 @@ local sameType = ____types.sameType
 local TEXT_EVENTS = ____types.TEXT_EVENTS
 local TICK_EVENT = ____types.TICK_EVENT
 local typeName = ____types.typeName
+function ____exports.listed(self, fields)
+    return #fields == 0 and "no field" or table.concat(
+        __TS__ArrayMap(
+            fields,
+            function(____, field) return ("'" .. field) .. "'" end
+        ),
+        ", "
+    )
+end
 local function collectSites(self, blocks, chartPath, sites)
     for ____, block in ipairs(blocks) do
         local ____temp_1
@@ -39692,7 +45148,15 @@ local function fieldType(self, contract, field)
     end
     return contract.mode == "table" and ({list = ____type}) or ____type
 end
-local INTERACTIVE_KINDS = {"Shape", "Text", "Component"}
+local INTERACTIVE_KINDS = {
+    "Shape",
+    "Text",
+    "Component",
+    "Mesh",
+    "Solid",
+    "Facets",
+    "Terrain"
+}
 blockKind = function(____, block) return block.kind == "Widget" and "Component" or block.kind end
 local function collectElements(self, sflDocument)
     local elements = __TS__New(Map)
@@ -39863,7 +45327,7 @@ local function eventIsKnown(self, site, componentType, report)
     report(
         nil,
         "unknown-event",
-        __t(nil, #allowed) and ((((((kind .. " '") .. name) .. "' has no event '") .. handler.event) .. "' (events: ") .. table.concat(allowed, ", ")) .. ")." or ((kind .. " '") .. name) .. "' has no events; handlers belong on a Shape, Text, Component or DataSource."
+        __t(nil, #allowed) and ((((((kind .. " '") .. name) .. "' has no event '") .. handler.event) .. "' (events: ") .. table.concat(allowed, ", ")) .. ")." or ((kind .. " '") .. name) .. "' has no events; handlers belong on a Shape, Text, Component, a body in a Scene or DataSource."
     )
     return false
 end
@@ -39901,6 +45365,14 @@ local function bindAssignment(self, assignment, name, own, contracts, scope, rep
     local wanted = contract.fields[field]
     if not __t(nil, wanted) then
         at(nil, "unknown-target", ((("DataSource '" .. source) .. "' has no field '") .. field) .. "'.")
+        return nil
+    end
+    if contract.writable and not __TS__ArrayIncludes(contract.writable, field) then
+        at(
+            nil,
+            "field-not-writable",
+            ((((("'" .. target) .. "' cannot be written: DataSource '") .. source) .. "' lists ") .. ____exports.listed(nil, contract.writable)) .. " as writable."
+        )
         return nil
     end
     local expr = own and qualify(nil, assignment.expr, own) or assignment.expr
@@ -40139,8 +45611,8 @@ local function indexByField(self, bindings)
     end
     return byField
 end
-function ____exports.buildBindingGraph(self, source)
-    local sflDocument = expandDocument(nil, source)
+function ____exports.buildBindingGraph(self, source, tables)
+    local sflDocument = expandDocument(nil, source, tables)
     local ____collectContracts_result_40 = collectContracts(nil, sflDocument)
     local contracts = ____collectContracts_result_40.contracts
     local diagnostics = ____collectContracts_result_40.diagnostics
@@ -40269,6 +45741,371 @@ return ____exports
 local ____exports = {}
 return ____exports
  end,
+["core.binding.checkData"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__TypeOf = ____lualib.__TS__TypeOf
+local __TS__ArrayIsArray = ____lualib.__TS__ArrayIsArray
+local __TS__NumberIsInteger = ____lualib.__TS__NumberIsInteger
+local __TS__ObjectEntries = ____lualib.__TS__ObjectEntries
+local ____exports = {}
+local function typeOfValue(____, value)
+    return (type(value) == "number" or type(value) == "string" or type(value) == "boolean") and __TS__TypeOf(value) or "other"
+end
+function ____exports.checkData(self, contract, data)
+    local rows = __TS__ArrayIsArray(data) and data or ({data})
+    if contract.mode == "table" ~= __TS__ArrayIsArray(data) then
+        return ((((("DataSource '" .. contract.name) .. "' is a ") .. contract.mode) .. " source but delivered ") .. (__TS__ArrayIsArray(data) and "rows" or "a record")) .. "."
+    end
+    for ____, row in ipairs(rows) do
+        for ____, ____value in ipairs(__TS__ObjectEntries(contract.fields)) do
+            local field = ____value[1]
+            local ____type = ____value[2]
+            if typeOfValue(nil, row[field]) ~= ____type then
+                return ((((((("'" .. contract.name) .. ".") .. field) .. "' should be ") .. contract.declared[field]) .. ", got ") .. typeOfValue(nil, row[field])) .. "."
+            end
+            if contract.declared[field] == "int" and not __TS__NumberIsInteger(row[field]) then
+                return ((((("'" .. contract.name) .. ".") .. field) .. "' should be a whole number (int), got ") .. tostring(row[field])) .. "."
+            end
+        end
+    end
+    return nil
+end
+return ____exports
+ end,
+["core.binding.remake"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local Map = ____lualib.Map
+local __TS__New = ____lualib.__TS__New
+local __TS__Number = ____lualib.__TS__Number
+local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
+local __TS__Iterator = ____lualib.__TS__Iterator
+local __TS__ArrayIsArray = ____lualib.__TS__ArrayIsArray
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __clone = ______shims.__clone
+local __isFinite = ______shims.__isFinite
+local __microtask = ______shims.__microtask
+local ____fromSfl = require("core.renderInput.fromSfl.index")
+local documentToRenderInput = ____fromSfl.documentToRenderInput
+local ____expansion = require("core.sflLanguage.expansion.index")
+local eachSources = ____expansion.eachSources
+local withParameterValues = ____expansion.withParameterValues
+local ____evaluation = require("core.binding.evaluation")
+local flush = ____evaluation.flush
+local ____graph = require("core.binding.graph")
+local buildBindingGraph = ____graph.buildBindingGraph
+local ____runtimeState = require("core.binding.runtimeState")
+local addElementStates = ____runtimeState.addElementStates
+local function parameterValues(self, state)
+    local values = __TS__New(Map)
+    for ____, contract in __TS__Iterator(state.graph.contracts:values()) do
+        do
+            if not contract.parameters then
+                goto __continue3
+            end
+            local ____opt_0 = state.sources:get(contract.name)
+            local row = ____opt_0 and ____opt_0:get()
+            for ____, key in ipairs(__TS__ObjectKeys(contract.fields)) do
+                local value = __TS__Number(row and row[key])
+                if __isFinite(nil, value) then
+                    values:set((contract.name .. ".") .. key, value)
+                end
+            end
+        end
+        ::__continue3::
+    end
+    return values
+end
+function ____exports.tableRows(self, state)
+    local tables = __TS__New(Map)
+    local ____state_document_4 = state.document
+    local blocks = ____state_document_4.blocks
+    for ____, name in __TS__Iterator(eachSources(nil, blocks)) do
+        local ____opt_5 = state.sources:get(name)
+        local rows = ____opt_5 and ____opt_5:get()
+        if __TS__ArrayIsArray(rows) then
+            tables:set(name, rows)
+        end
+    end
+    return tables
+end
+function ____exports.remake(self, state)
+    local document = withParameterValues(
+        nil,
+        state.document,
+        parameterValues(nil, state)
+    )
+    local tables = ____exports.tableRows(nil, state)
+    state.graph = buildBindingGraph(nil, document, tables)
+    state.input = __clone(
+        nil,
+        documentToRenderInput(nil, document, tables)
+    )
+    addElementStates(nil, state.graph, state.input, state.elementState)
+    state.applied:clear()
+    for ____, binding in ipairs(state.graph.bindings) do
+        state.dirty:add(binding)
+    end
+    state.renderNeeded = true
+    flush(nil, state)
+end
+function ____exports.remakeNow(self, state)
+    if state.remakePending then
+        state.remakePending = false
+        ____exports.remake(nil, state)
+    end
+end
+function ____exports.requestRemake(self, state)
+    if state.remakePending then
+        return
+    end
+    state.remakePending = true
+    local function run()
+        return ____exports.remakeNow(nil, state)
+    end
+    local frame = _G.requestAnimationFrame
+    if frame then
+        frame(nil, run)
+    else
+        __microtask(nil, run)
+    end
+end
+return ____exports
+ end,
+["core.binding.writes"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local __TS__ArrayMap = ____lualib.__TS__ArrayMap
+local __TS__ArrayFlatMap = ____lualib.__TS__ArrayFlatMap
+local __TS__ArrayIncludes = ____lualib.__TS__ArrayIncludes
+local __TS__ArrayFilter = ____lualib.__TS__ArrayFilter
+local __TS__ArrayPushArray = ____lualib.__TS__ArrayPushArray
+local __TS__ArrayIsArray = ____lualib.__TS__ArrayIsArray
+local __TS__ObjectEntries = ____lualib.__TS__ObjectEntries
+local __TS__ObjectFromEntries = ____lualib.__TS__ObjectFromEntries
+local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
+local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
+local ____exports = {}
+local ____graph = require("core.binding.graph")
+local listed = ____graph.listed
+local function warnOnce(self, state, name, code, message, line, col)
+    local key = "write:" .. name
+    if state.warned:has(key) then
+        return
+    end
+    state.warned:add(key)
+    local ____state_diagnostics_0 = state.diagnostics
+    ____state_diagnostics_0[#____state_diagnostics_0 + 1] = {
+        severity = "warning",
+        code = code,
+        message = message,
+        line = line,
+        col = col
+    }
+end
+function ____exports.sourceWrites(self, graph)
+    local writes = __TS__ArrayFlatMap(
+        graph.handlers,
+        function(____, handler) return __TS__ArrayMap(
+            handler.assignments,
+            function(____, ____bindingPattern0)
+                local col
+                local line
+                local field
+                local source
+                source = ____bindingPattern0.source
+                field = ____bindingPattern0.field
+                line = ____bindingPattern0.line
+                col = ____bindingPattern0.col
+                return {source = source, field = field, line = line, col = col}
+            end
+        ) end
+    )
+    for ____, binding in ipairs(graph.bindings) do
+        local target = binding.operator == "<->" and binding.expr.kind == "ref" and binding.expr.path or nil
+        if (target and target[2]) ~= nil then
+            writes[#writes + 1] = {source = target[1], field = target[2], line = binding.line, col = binding.col}
+        end
+    end
+    return writes
+end
+function ____exports.hostWriteProblems(self, graph, name, allowed)
+    return __TS__ArrayMap(
+        __TS__ArrayFilter(
+            ____exports.sourceWrites(nil, graph),
+            function(____, write) return write.source == name and not __TS__ArrayIncludes(allowed, write.field) end
+        ),
+        function(____, ____bindingPattern0)
+            local col
+            local line
+            local field
+            field = ____bindingPattern0.field
+            line = ____bindingPattern0.line
+            col = ____bindingPattern0.col
+            return {
+                severity = "error",
+                code = "write-not-allowed",
+                message = ((((("'" .. name) .. ".") .. field) .. "' is written by the document, but the host does not let it be written (it allows ") .. listed(nil, allowed)) .. ").",
+                line = line,
+                col = col
+            }
+        end
+    )
+end
+function ____exports.checkHostWritable(self, state, name, allowed)
+    __TS__ArrayPushArray(
+        state.diagnostics,
+        ____exports.hostWriteProblems(nil, state.graph, name, allowed)
+    )
+end
+function ____exports.writeFields(self, state, name, fields, line, col)
+    local source = state.sources:get(name)
+    if not source then
+        warnOnce(
+            nil,
+            state,
+            name,
+            "source-not-registered",
+            ("DataSource '" .. name) .. "' has no registered source, so writing to it does nothing.",
+            line,
+            col
+        )
+        return
+    end
+    local row = source:get()
+    if __TS__ArrayIsArray(row) then
+        return
+    end
+    local allowed = source.writable
+    local changed = __TS__ObjectFromEntries(__TS__ArrayFilter(
+        __TS__ObjectEntries(fields),
+        function(____, ____bindingPattern0)
+            local value
+            local field
+            field = ____bindingPattern0[1]
+            value = ____bindingPattern0[2]
+            return row[field] ~= value and (not allowed or __TS__ArrayIncludes(allowed, field))
+        end
+    ))
+    if #__TS__ObjectKeys(changed) == 0 then
+        return
+    end
+    if source.write ~= nil and type(source.write) == "function" then
+        source:write(changed)
+    elseif source.set ~= nil and type(source.set) == "function" then
+        source:set(__TS__ObjectAssign({}, row, changed))
+    else
+        warnOnce(
+            nil,
+            state,
+            name,
+            "source-not-writable",
+            ("DataSource '" .. name) .. "' was registered without write or set, so writing to it does nothing.",
+            line,
+            col
+        )
+    end
+end
+return ____exports
+ end,
+["core.binding.sources"] = function(...) 
+local ____lualib = require("lualib_bundle")
+local Error = ____lualib.Error
+local RangeError = ____lualib.RangeError
+local ReferenceError = ____lualib.ReferenceError
+local SyntaxError = ____lualib.SyntaxError
+local TypeError = ____lualib.TypeError
+local URIError = ____lualib.URIError
+local __TS__New = ____lualib.__TS__New
+local ____exports = {}
+local ______shims = require("core.__shims")
+local __t = ______shims.__t
+local ____expansion = require("core.sflLanguage.expansion.index")
+local eachSources = ____expansion.eachSources
+local ____checkData = require("core.binding.checkData")
+local checkData = ____checkData.checkData
+local ____evaluation = require("core.binding.evaluation")
+local markDirty = ____evaluation.markDirty
+local schedule = ____evaluation.schedule
+local ____remake = require("core.binding.remake")
+local requestRemake = ____remake.requestRemake
+local ____writes = require("core.binding.writes")
+local checkHostWritable = ____writes.checkHostWritable
+local function remade(self, state, name)
+    local ____state_document_0 = state.document
+    local blocks = ____state_document_0.blocks
+    local ____Boolean_3 = Boolean
+    local ____opt_1 = state.graph.contracts:get(name)
+    return ____Boolean_3(nil, ____opt_1 and ____opt_1.parameters) or eachSources(nil, blocks):has(name)
+end
+local function adopt(self, state, name, registration)
+    local contract = state.graph.contracts:get(name)
+    if not contract or Boolean(nil, contract.parameters) ~= registration.own then
+        return
+    end
+    local problem = checkData(
+        nil,
+        contract,
+        registration.source:get()
+    )
+    if __t(nil, problem) then
+        local ____state_diagnostics_4 = state.diagnostics
+        ____state_diagnostics_4[#____state_diagnostics_4 + 1] = {
+            severity = "error",
+            code = "data-type-mismatch",
+            message = problem,
+            line = 0,
+            col = 0
+        }
+        return
+    end
+    state.sources:set(name, registration.source)
+    state.warned:delete(name)
+    state.warned:delete("write:" .. name)
+    markDirty(nil, state, name)
+    schedule(nil, state)
+end
+function ____exports.registerSource(self, state, name, source, own)
+    if own == nil then
+        own = false
+    end
+    if not state.graph.contracts:has(name) then
+        error(
+            __TS__New(Error, ("No DataSource '" .. name) .. "' is declared in the SFL."),
+            0
+        )
+    end
+    if source.writable then
+        checkHostWritable(nil, state, name, source.writable)
+    end
+    local registration = {
+        source = source,
+        own = own,
+        unsubscribe = function() return nil end
+    }
+    state.registered:set(name, registration)
+    adopt(nil, state, name, registration)
+    if not own and remade(nil, state, name) then
+        requestRemake(nil, state)
+    end
+    registration.unsubscribe = source:subscribe(function()
+        if state.registered:get(name) ~= registration then
+            return
+        end
+        adopt(nil, state, name, registration)
+        if state.sources:get(name) == source and remade(nil, state, name) then
+            requestRemake(nil, state)
+        end
+    end)
+    return function()
+        registration:unsubscribe()
+        if state.registered:get(name) == registration then
+            state.registered:delete(name)
+            state.sources:delete(name)
+        end
+    end
+end
+return ____exports
+ end,
 ["core.binding.runtimeState"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local __TS__Number = ____lualib.__TS__Number
@@ -40353,12 +46190,14 @@ function ____exports.createRuntimeState(self, sfl, options)
         diagnostics = {table.unpack(graph.diagnostics)},
         input = input,
         sources = __TS__New(Map),
+        registered = __TS__New(Map),
         applied = __TS__New(Map),
         dirty = __TS__New(Set),
         listeners = __TS__New(Set),
         warned = __TS__New(Set),
         liveListeners = __TS__New(Set),
         liveState = __TS__New(Map),
+        resetListeners = __TS__New(Set),
         elementState = elementState,
         scheduled = false,
         renderNeeded = false,
@@ -40551,7 +46390,14 @@ local function evaluateBinding(self, state, binding)
         )
         return false
     end
-    if binding.ownerKind == "Mesh" or binding.ownerKind == "Canvas" or binding.ownerKind == "Light" then
+    if __TS__ArrayIncludes({
+        "Mesh",
+        "Solid",
+        "Facets",
+        "Terrain",
+        "Canvas",
+        "Light"
+    }, binding.ownerKind) then
         applyMesh(
             nil,
             state.input,
@@ -40608,9 +46454,12 @@ return ____exports
  end,
 ["core.binding.handlers"] = function(...) 
 local ____lualib = require("lualib_bundle")
+local Map = ____lualib.Map
+local __TS__New = ____lualib.__TS__New
 local __TS__ArrayEvery = ____lualib.__TS__ArrayEvery
-local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
+local __TS__Iterator = ____lualib.__TS__Iterator
 local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
+local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local ____exports = {}
 local ______shims = require("core.__shims")
 local __isFinite = ______shims.__isFinite
@@ -40625,6 +46474,8 @@ local ____runtimeState = require("core.binding.runtimeState")
 local readValue = ____runtimeState.readValue
 local ____types = require("core.binding.types")
 local TICK_EVENT = ____types.TICK_EVENT
+local ____writes = require("core.binding.writes")
+local writeFields = ____writes.writeFields
 function ____exports.runHandler(self, state, handler, delta, selfId)
     local env = {read = function(____, path)
         if path[1] == "time" and path[2] == "delta" then
@@ -40635,9 +46486,9 @@ function ____exports.runHandler(self, state, handler, delta, selfId)
         end
         return readValue(nil, state, path)
     end}
+    local writes = __TS__New(Map)
     for ____, assignment in ipairs(handler.assignments) do
         do
-            local target = state.sources:get(assignment.source)
             local readable = __TS__ArrayEvery(
                 collectRefs(nil, assignment.expr),
                 function(____, ____bindingPattern0)
@@ -40646,7 +46497,7 @@ function ____exports.runHandler(self, state, handler, delta, selfId)
                     return name == "time" or name == "self" and Boolean(nil, selfId) or state.sources:has(name) or state.elementState:has(name)
                 end
             )
-            if not target or not (target.set ~= nil) or not readable then
+            if not readable then
                 goto __continue6
             end
             local value = evaluate(nil, assignment.expr, env)
@@ -40657,12 +46508,25 @@ function ____exports.runHandler(self, state, handler, delta, selfId)
                     goto __continue6
                 end
             end
-            local row = target:get()
-            if row[assignment.field] ~= value then
-                target:set(__TS__ObjectAssign({}, row, {[assignment.field] = value}))
-            end
+            local write = writes:get(assignment.source) or ({fields = {}, line = assignment.line, col = assignment.col})
+            write.fields[assignment.field] = value
+            writes:set(assignment.source, write)
         end
         ::__continue6::
+    end
+    for ____, ____value in __TS__Iterator(writes) do
+        local source = ____value[1]
+        local fields = ____value[2].fields
+        local line = ____value[2].line
+        local col = ____value[2].col
+        writeFields(
+            nil,
+            state,
+            source,
+            fields,
+            line,
+            col
+        )
     end
 end
 function ____exports.dispatch(self, state, id, event)
@@ -40699,89 +46563,348 @@ function ____exports.setElementState(self, state, id, patch)
 end
 return ____exports
  end,
-["core.binding.remake"] = function(...) 
+["core.binding.replace"] = function(...) 
 local ____lualib = require("lualib_bundle")
+local __TS__ArraySome = ____lualib.__TS__ArraySome
 local Map = ____lualib.Map
 local __TS__New = ____lualib.__TS__New
-local __TS__Number = ____lualib.__TS__Number
+local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local __TS__ObjectKeys = ____lualib.__TS__ObjectKeys
 local __TS__Iterator = ____lualib.__TS__Iterator
+local __TS__ArrayIncludes = ____lualib.__TS__ArrayIncludes
+local __TS__ObjectEntries = ____lualib.__TS__ObjectEntries
+local __TS__ArrayIsArray = ____lualib.__TS__ArrayIsArray
+local __TS__ArrayPushArray = ____lualib.__TS__ArrayPushArray
+local Set = ____lualib.Set
+local __TS__Spread = ____lualib.__TS__Spread
+local __TS__ArraySplice = ____lualib.__TS__ArraySplice
 local ____exports = {}
 local ______shims = require("core.__shims")
 local __clone = ______shims.__clone
 local __isFinite = ______shims.__isFinite
-local __microtask = ______shims.__microtask
+local __t = ______shims.__t
 local ____fromSfl = require("core.renderInput.fromSfl.index")
 local documentToRenderInput = ____fromSfl.documentToRenderInput
+local ____sflLanguage = require("core.sflLanguage.index")
+local parse = ____sflLanguage.parse
 local ____expansion = require("core.sflLanguage.expansion.index")
+local eachSources = ____expansion.eachSources
 local withParameterValues = ____expansion.withParameterValues
+local ____checkData = require("core.binding.checkData")
+local checkData = ____checkData.checkData
+local ____dataSource = require("core.binding.dataSource")
+local createDataSource = ____dataSource.createDataSource
 local ____evaluation = require("core.binding.evaluation")
 local flush = ____evaluation.flush
 local ____graph = require("core.binding.graph")
 local buildBindingGraph = ____graph.buildBindingGraph
 local ____runtimeState = require("core.binding.runtimeState")
 local addElementStates = ____runtimeState.addElementStates
-local function parameterValues(self, state)
-    local values = __TS__New(Map)
-    for ____, contract in __TS__Iterator(state.graph.contracts:values()) do
+local ____sources = require("core.binding.sources")
+local registerSource = ____sources.registerSource
+local ____writes = require("core.binding.writes")
+local hostWriteProblems = ____writes.hostWriteProblems
+local sourceWrites = ____writes.sourceWrites
+local function failed(self, diagnostics)
+    return __TS__ArraySome(
+        diagnostics,
+        function(____, diagnostic) return diagnostic.severity == "error" end
+    )
+end
+local function readError(self, ____error)
+    local at = ____error
+    return {
+        severity = "error",
+        code = "document-not-read",
+        message = at.message or tostring(____error),
+        line = at.line or 0,
+        col = at.col or 0
+    }
+end
+local function keptParameters(self, state, graph)
+    local parameters = __TS__New(Map)
+    for ____, contract in __TS__Iterator(graph.contracts:values()) do
         do
             if not contract.parameters then
-                goto __continue3
+                goto __continue6
             end
-            local ____opt_0 = state.sources:get(contract.name)
-            local row = ____opt_0 and ____opt_0:get()
-            for ____, key in ipairs(__TS__ObjectKeys(contract.fields)) do
-                local value = __TS__Number(row and row[key])
-                if __isFinite(nil, value) then
-                    values:set((contract.name .. ".") .. key, value)
+            local before = state.registered:get(contract.name)
+            local row = before and before.own and before.source:get() or nil
+            local values = __TS__ObjectAssign({}, contract.parameters)
+            for ____, key in ipairs(__TS__ObjectKeys(values)) do
+                local value = row and row[key]
+                if type(value) == "number" and __isFinite(nil, value) then
+                    values[key] = value
                 end
             end
+            parameters:set(contract.name, values)
         end
-        ::__continue3::
+        ::__continue6::
     end
-    return values
+    return parameters
 end
-function ____exports.remake(self, state)
-    local document = withParameterValues(
-        nil,
-        state.document,
-        parameterValues(nil, state)
-    )
-    state.graph = buildBindingGraph(nil, document)
-    state.input = __clone(
-        nil,
-        documentToRenderInput(nil, document)
-    )
-    addElementStates(nil, state.graph, state.input, state.elementState)
-    state.applied:clear()
-    for ____, binding in ipairs(state.graph.bindings) do
-        state.dirty:add(binding)
+local function hostWrites(self, graph)
+    local writes = {}
+    for ____, ____value in ipairs(sourceWrites(nil, graph)) do
+        local source = ____value.source
+        local field = ____value.field
+        do
+            local ____opt_4 = graph.contracts:get(source)
+            if ____opt_4 and ____opt_4.parameters then
+                goto __continue13
+            end
+            if writes[source] == nil then
+                writes[source] = {}
+            end
+            if not __TS__ArrayIncludes(writes[source], field) then
+                local ____writes_source_6 = writes[source]
+                ____writes_source_6[#____writes_source_6 + 1] = field
+            end
+        end
+        ::__continue13::
     end
-    state.renderNeeded = true
-    flush(nil, state)
+    return writes
 end
-function ____exports.requestRemake(self, state)
-    if state.remakePending then
-        return
+local function prepare(self, state, sfl)
+    do
+        local function ____catch(____error)
+            return true, {readError(nil, ____error)}
+        end
+        local ____try, ____hasReturned, ____returnValue = pcall(function()
+            local written = parse(nil, sfl)
+            local parameters = keptParameters(
+                nil,
+                state,
+                buildBindingGraph(nil, written)
+            )
+            local values = __TS__New(Map)
+            for ____, ____value in __TS__Iterator(parameters) do
+                local name = ____value[1]
+                local row = ____value[2]
+                for ____, ____value in ipairs(__TS__ObjectEntries(row)) do
+                    local key = ____value[1]
+                    local value = ____value[2]
+                    values:set((name .. ".") .. key, value)
+                end
+            end
+            local made = withParameterValues(nil, written, values)
+            local tables = __TS__New(Map)
+            for ____, name in __TS__Iterator(eachSources(nil, written.blocks)) do
+                local ____opt_7 = state.registered:get(name)
+                local rows = ____opt_7 and ____opt_7.source:get()
+                if __TS__ArrayIsArray(rows) then
+                    tables:set(name, rows)
+                end
+            end
+            local graph = buildBindingGraph(nil, made, tables)
+            local diagnostics = {table.unpack(graph.diagnostics)}
+            for ____, ____value in __TS__Iterator(state.registered) do
+                local name = ____value[1]
+                local source = ____value[2].source
+                local own = ____value[2].own
+                do
+                    local contract = graph.contracts:get(name)
+                    if own or not contract or contract.parameters then
+                        goto __continue26
+                    end
+                    local problem = checkData(
+                        nil,
+                        contract,
+                        source:get()
+                    )
+                    if __t(nil, problem) then
+                        diagnostics[#diagnostics + 1] = {
+                            severity = "error",
+                            code = "data-type-mismatch",
+                            message = problem,
+                            line = 0,
+                            col = 0
+                        }
+                    end
+                    if source.writable then
+                        __TS__ArrayPushArray(
+                            diagnostics,
+                            hostWriteProblems(nil, graph, name, source.writable)
+                        )
+                    end
+                end
+                ::__continue26::
+            end
+            local input = __clone(
+                nil,
+                documentToRenderInput(nil, made, tables)
+            )
+            return true, {
+                written = written,
+                graph = graph,
+                input = input,
+                parameters = parameters,
+                diagnostics = diagnostics,
+                writes = hostWrites(nil, graph)
+            }
+        end)
+        if not ____try then
+            ____hasReturned, ____returnValue = ____catch(____hasReturned)
+        end
+        if ____hasReturned then
+            return ____returnValue
+        end
     end
-    state.remakePending = true
-    local function run()
-        state.remakePending = false
-        ____exports.remake(nil, state)
+end
+function ____exports.checkDocument(self, state, sfl)
+    local candidate = prepare(nil, state, sfl)
+    if __TS__ArrayIsArray(candidate) then
+        return {ok = false, diagnostics = candidate, writes = {}}
     end
-    local frame = _G.requestAnimationFrame
-    if frame then
-        frame(nil, run)
-    else
-        __microtask(nil, run)
+    return {
+        ok = not failed(nil, candidate.diagnostics),
+        diagnostics = candidate.diagnostics,
+        writes = candidate.writes
+    }
+end
+local function put(self, target, from)
+    target:clear()
+    for ____, ____value in __TS__Iterator(from) do
+        local key = ____value[1]
+        local value = ____value[2]
+        target:set(key, value)
     end
+end
+function ____exports.replaceDocument(self, state, sfl)
+    local candidate = prepare(nil, state, sfl)
+    if __TS__ArrayIsArray(candidate) then
+        return {ok = false, diagnostics = candidate, writes = {}}
+    end
+    local diagnostics = candidate.diagnostics
+    local writes = candidate.writes
+    local graph = candidate.graph
+    local input = candidate.input
+    if failed(nil, diagnostics) then
+        return {ok = false, diagnostics = diagnostics, writes = writes}
+    end
+    local before = {
+        document = state.document,
+        graph = state.graph,
+        input = state.input,
+        sources = __TS__New(Map, state.sources),
+        registered = __TS__New(Map, state.registered),
+        applied = __TS__New(Map, state.applied),
+        liveState = __TS__New(Map, state.liveState),
+        elementState = __TS__New(Map, state.elementState),
+        diagnostics = {table.unpack(state.diagnostics)},
+        warned = __TS__New(Set, state.warned)
+    }
+    local added = {}
+    do
+        local function ____catch(____error)
+            for ____, release in ipairs(added) do
+                release(nil)
+            end
+            state.document = before.document
+            state.graph = before.graph
+            state.input = before.input
+            put(nil, state.sources, before.sources)
+            put(nil, state.registered, before.registered)
+            put(nil, state.applied, before.applied)
+            put(nil, state.liveState, before.liveState)
+            put(nil, state.elementState, before.elementState)
+            __TS__ArraySplice(
+                state.diagnostics,
+                0,
+                #state.diagnostics,
+                table.unpack(before.diagnostics)
+            )
+            state.warned:clear()
+            for ____, key in __TS__Iterator(before.warned) do
+                state.warned:add(key)
+            end
+            state.dirty:clear()
+            for ____, change in __TS__Iterator(state.liveState:values()) do
+                for ____, listener in ipairs({__TS__Spread(state.liveListeners)}) do
+                    listener(nil, change)
+                end
+            end
+            state.renderNeeded = true
+            flush(nil, state)
+            return true, {
+                ok = false,
+                diagnostics = {readError(nil, ____error)},
+                writes = writes
+            }
+        end
+        local ____try, ____hasReturned, ____returnValue = pcall(function()
+            state.document = candidate.written
+            state.graph = graph
+            state.input = input
+            for ____, ____value in __TS__Iterator(before.registered) do
+                local name = ____value[1]
+                local registration = ____value[2]
+                local contract = graph.contracts:get(name)
+                if registration.own then
+                    state.registered:delete(name)
+                    state.sources:delete(name)
+                elseif contract and not contract.parameters then
+                    state.sources:set(name, registration.source)
+                else
+                    state.sources:delete(name)
+                end
+            end
+            for ____, ____value in __TS__Iterator(candidate.parameters) do
+                local name = ____value[1]
+                local row = ____value[2]
+                added[#added + 1] = registerSource(
+                    nil,
+                    state,
+                    name,
+                    createDataSource(nil, row),
+                    true
+                )
+            end
+            for ____, name in ipairs({__TS__Spread(state.elementState:keys())}) do
+                if not graph.elements:has(name) then
+                    state.elementState:delete(name)
+                end
+            end
+            addElementStates(nil, graph, input, state.elementState)
+            state.applied:clear()
+            state.liveState:clear()
+            state.warned:clear()
+            __TS__ArraySplice(
+                state.diagnostics,
+                0,
+                #state.diagnostics,
+                table.unpack(diagnostics)
+            )
+            state.dirty:clear()
+            for ____, binding in ipairs(graph.bindings) do
+                state.dirty:add(binding)
+            end
+            state.renderNeeded = true
+            state.remakePending = false
+            for ____, reset in ipairs({__TS__Spread(state.resetListeners)}) do
+                reset(nil)
+            end
+            flush(nil, state)
+        end)
+        if not ____try then
+            ____hasReturned, ____returnValue = ____catch(____hasReturned)
+        end
+        if ____hasReturned then
+            return ____returnValue
+        end
+    end
+    for ____, registration in __TS__Iterator(before.registered:values()) do
+        if registration.own then
+            registration:unsubscribe()
+        end
+    end
+    return {ok = true, diagnostics = diagnostics, writes = writes}
 end
 return ____exports
  end,
 ["core.binding.userInput"] = function(...) 
 local ____lualib = require("lualib_bundle")
 local __TS__ArrayFind = ____lualib.__TS__ArrayFind
-local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local __TS__TypeOf = ____lualib.__TS__TypeOf
 local WeakMap = ____lualib.WeakMap
 local __TS__New = ____lualib.__TS__New
@@ -40812,6 +46935,8 @@ local dispatch = ____handlers.dispatch
 local setElementState = ____handlers.setElementState
 local ____types = require("core.binding.types")
 local CHANGE_EVENT = ____types.CHANGE_EVENT
+local ____writes = require("core.binding.writes")
+local writeFields = ____writes.writeFields
 local function descriptorOf(self, state, id)
     local info = state.graph.elements:get(id)
     local ____temp_2
@@ -40833,19 +46958,15 @@ local function valueBinding(self, state, id, property)
 end
 local function writeBack(self, state, binding, value)
     local target = binding.expr.kind == "ref" and binding.expr.path or nil
-    local ____target_3
     if target then
-        ____target_3 = state.sources:get(target[1])
-    else
-        ____target_3 = nil
-    end
-    local source = ____target_3
-    if not target or not source or not (source.set ~= nil) then
-        return
-    end
-    local row = source:get()
-    if row[target[2]] ~= value then
-        source:set(__TS__ObjectAssign({}, row, {[target[2]] = value}))
+        writeFields(
+            nil,
+            state,
+            target[1],
+            {[target[2]] = value},
+            binding.line,
+            binding.col
+        )
     end
 end
 local function changeValueEnd(self, state, id, next)
@@ -40878,8 +46999,8 @@ function ____exports.changeComponentValue(self, state, id, next, property)
     if property == "valueEnd" then
         return type(next) == "number" and changeValueEnd(nil, state, id, next)
     end
-    local ____opt_4 = descriptorOf(nil, state, id)
-    local spec = ____opt_4 and ____opt_4.value
+    local ____opt_3 = descriptorOf(nil, state, id)
+    local spec = ____opt_3 and ____opt_3.value
     local element = state.elementState:get(id)
     if not (spec and spec.writable) or not element or __TS__TypeOf(next) ~= spec.type or element.value == next then
         return false
@@ -40922,16 +47043,16 @@ local function slideAlong(self, properties, width, height, x, y)
     return length > reach * 2 and within(nil, (position * length - reach) / (length - reach * 2)) or position
 end
 local function turnAlong(self, properties, width, height, x, y)
-    local ____properties_start_8 = properties.start
-    if ____properties_start_8 == nil then
-        ____properties_start_8 = 225
+    local ____properties_start_7 = properties.start
+    if ____properties_start_7 == nil then
+        ____properties_start_7 = 225
     end
-    local start = __TS__Number(____properties_start_8) * math.pi / 180
-    local ____properties_sweep_9 = properties.sweep
-    if ____properties_sweep_9 == nil then
-        ____properties_sweep_9 = 270
+    local start = __TS__Number(____properties_start_7) * math.pi / 180
+    local ____properties_sweep_8 = properties.sweep
+    if ____properties_sweep_8 == nil then
+        ____properties_sweep_8 = 270
     end
-    local sweep = __TS__Number(____properties_sweep_9) * math.pi / 180
+    local sweep = __TS__Number(____properties_sweep_8) * math.pi / 180
     local gap = TAU - sweep
     local angle = math.atan(-(y - 0.5) * height, (x - 0.5) * width)
     local shifted = start - angle + gap / 2
@@ -40945,17 +47066,17 @@ function ____exports.slideElement(self, state, id, x, y)
     if not component or not isGenericComponent(nil, component) then
         return
     end
-    local ____opt_10 = descriptorOf(nil, state, id)
-    local kind = ____opt_10 and ____opt_10.interaction
+    local ____opt_9 = descriptorOf(nil, state, id)
+    local kind = ____opt_9 and ____opt_9.interaction
     local properties = component.properties
     if kind == "pick" then
-        local ____properties_options_12 = properties.options
-        if ____properties_options_12 == nil then
-            ____properties_options_12 = ""
+        local ____properties_options_11 = properties.options
+        if ____properties_options_11 == nil then
+            ____properties_options_11 = ""
         end
         local count = #__TS__ArrayFilter(
             __TS__StringSplit(
-                tostring(____properties_options_12),
+                tostring(____properties_options_11),
                 ","
             ),
             function(____, ...) return __t(
@@ -40991,21 +47112,21 @@ function ____exports.slideElement(self, state, id, x, y)
         x,
         y
     )
-    local ____properties_min_13 = properties.min
-    if ____properties_min_13 == nil then
-        ____properties_min_13 = 0
+    local ____properties_min_12 = properties.min
+    if ____properties_min_12 == nil then
+        ____properties_min_12 = 0
     end
-    local min = __TS__Number(____properties_min_13)
-    local ____properties_max_14 = properties.max
-    if ____properties_max_14 == nil then
-        ____properties_max_14 = 100
+    local min = __TS__Number(____properties_min_12)
+    local ____properties_max_13 = properties.max
+    if ____properties_max_13 == nil then
+        ____properties_max_13 = 100
     end
-    local max = __TS__Number(____properties_max_14)
-    local ____properties_step_15 = properties.step
-    if ____properties_step_15 == nil then
-        ____properties_step_15 = 0
+    local max = __TS__Number(____properties_max_13)
+    local ____properties_step_14 = properties.step
+    if ____properties_step_14 == nil then
+        ____properties_step_14 = 0
     end
-    local step = __TS__Number(____properties_step_15)
+    local step = __TS__Number(____properties_step_14)
     local value = min + along * (max - min)
     if step > 0 then
         value = min + math.floor((value - min) / step + 0.5) * step
@@ -41022,11 +47143,11 @@ function ____exports.slideElement(self, state, id, x, y)
         return
     end
     local low = __TS__Number(component.value)
-    local ____properties_valueEnd_16 = properties.valueEnd
-    if ____properties_valueEnd_16 == nil then
-        ____properties_valueEnd_16 = max
+    local ____properties_valueEnd_15 = properties.valueEnd
+    if ____properties_valueEnd_15 == nil then
+        ____properties_valueEnd_15 = max
     end
-    local high = __TS__Number(____properties_valueEnd_16)
+    local high = __TS__Number(____properties_valueEnd_15)
     local holds = grabbed:get(state) or __TS__New(Map)
     grabbed:set(state, holds)
     if not holds:has(id) then
@@ -41052,12 +47173,12 @@ end
 local function reactToActivation(self, state, id)
     local element = state.elementState:get(id)
     local descriptor = descriptorOf(nil, state, id)
-    local ____temp_21 = element and (descriptor and descriptor.interaction) == "toggle"
-    if ____temp_21 then
-        local ____opt_19 = descriptor.value
-        ____temp_21 = (____opt_19 and ____opt_19.type) == "boolean"
+    local ____temp_20 = element and (descriptor and descriptor.interaction) == "toggle"
+    if ____temp_20 then
+        local ____opt_18 = descriptor.value
+        ____temp_20 = (____opt_18 and ____opt_18.type) == "boolean"
     end
-    if ____temp_21 then
+    if ____temp_20 then
         ____exports.changeComponentValue(nil, state, id, element.value ~= true)
     end
 end
@@ -41072,9 +47193,9 @@ function ____exports.focusElement(self, state, id, focused)
     schedule(nil, state)
 end
 function ____exports.pressElement(self, state, id)
-    local ____opt_22 = grabbed:get(state)
-    if ____opt_22 ~= nil then
-        ____opt_22:delete(id)
+    local ____opt_21 = grabbed:get(state)
+    if ____opt_21 ~= nil then
+        ____opt_21:delete(id)
     end
     if isComponentDisabled(nil, state.input, id) then
         return
@@ -41083,9 +47204,9 @@ function ____exports.pressElement(self, state, id)
     dispatch(nil, state, id, "onPress")
 end
 function ____exports.releaseElement(self, state, id, tapped)
-    local ____opt_24 = grabbed:get(state)
-    if ____opt_24 ~= nil then
-        ____opt_24:delete(id)
+    local ____opt_23 = grabbed:get(state)
+    if ____opt_23 ~= nil then
+        ____opt_23:delete(id)
     end
     setElementState(nil, state, id, {pressed = false})
     if isComponentDisabled(nil, state.input, id) then
@@ -41110,29 +47231,17 @@ return ____exports
  end,
 ["core.binding.runtime"] = function(...) 
 local ____lualib = require("lualib_bundle")
-local Error = ____lualib.Error
-local RangeError = ____lualib.RangeError
-local ReferenceError = ____lualib.ReferenceError
-local SyntaxError = ____lualib.SyntaxError
-local TypeError = ____lualib.TypeError
-local URIError = ____lualib.URIError
-local __TS__New = ____lualib.__TS__New
 local __TS__Iterator = ____lualib.__TS__Iterator
 local __TS__ObjectAssign = ____lualib.__TS__ObjectAssign
 local __TS__ObjectRest = ____lualib.__TS__ObjectRest
 local __TS__ObjectEntries = ____lualib.__TS__ObjectEntries
 local ____exports = {}
-local ______shims = require("core.__shims")
-local __t = ______shims.__t
 local ____render = require("core.render")
 local renderCanvas = ____render.renderCanvas
-local ____checkData = require("core.binding.checkData")
-local checkData = ____checkData.checkData
 local ____dataSource = require("core.binding.dataSource")
 local createDataSource = ____dataSource.createDataSource
 local ____evaluation = require("core.binding.evaluation")
 local flush = ____evaluation.flush
-local markDirty = ____evaluation.markDirty
 local schedule = ____evaluation.schedule
 local ____handlers = require("core.binding.handlers")
 local dispatch = ____handlers.dispatch
@@ -41141,9 +47250,14 @@ local setElementState = ____handlers.setElementState
 local ____interactive = require("core.binding.interactive")
 local interactiveElements = ____interactive.interactiveElements
 local ____remake = require("core.binding.remake")
-local requestRemake = ____remake.requestRemake
+local remakeNow = ____remake.remakeNow
+local ____replace = require("core.binding.replace")
+local checkDocument = ____replace.checkDocument
+local replaceDocument = ____replace.replaceDocument
 local ____runtimeState = require("core.binding.runtimeState")
 local createRuntimeState = ____runtimeState.createRuntimeState
+local ____sources = require("core.binding.sources")
+local registerSource = ____sources.registerSource
 local ____userInput = require("core.binding.userInput")
 local activateElement = ____userInput.activateElement
 local changeComponentValue = ____userInput.changeComponentValue
@@ -41151,83 +47265,29 @@ local focusElement = ____userInput.focusElement
 local pressElement = ____userInput.pressElement
 local releaseElement = ____userInput.releaseElement
 local slideElement = ____userInput.slideElement
-local function registerSource(self, state, name, source, own)
-    if own == nil then
-        own = false
-    end
-    local contract = state.graph.contracts:get(name)
-    if not contract then
-        error(
-            __TS__New(Error, ("No DataSource '" .. name) .. "' is declared in the SFL."),
-            0
-        )
-    end
-    local function accept()
-        local problem = checkData(
-            nil,
-            contract,
-            source:get()
-        )
-        if __t(nil, problem) then
-            local ____state_diagnostics_0 = state.diagnostics
-            ____state_diagnostics_0[#____state_diagnostics_0 + 1] = {
-                severity = "error",
-                code = "data-type-mismatch",
-                message = problem,
-                line = 0,
-                col = 0
-            }
-            return false
-        end
-        return true
-    end
-    local function adopt()
-        if accept(nil) then
-            state.sources:set(name, source)
-            state.warned:delete(name)
-            markDirty(nil, state, name)
-            schedule(nil, state)
-        end
-    end
-    adopt(nil)
-    local parameters = Boolean(nil, contract.parameters)
-    if parameters and not own then
-        requestRemake(nil, state)
-    end
-    local unsubscribe = source:subscribe(function()
-        adopt(nil)
-        if parameters then
-            requestRemake(nil, state)
-        end
-    end)
-    return function()
-        unsubscribe(nil)
-        state.sources:delete(name)
-    end
-end
 local function pushLiveChange(self, target, change)
     if change.kind == "component" then
-        local ____opt_1 = target.setComponentValue or target.setWidgetValue
-        if ____opt_1 ~= nil then
+        local ____opt_0 = target.setComponentValue or target.setWidgetValue
+        if ____opt_0 ~= nil then
             (target.setComponentValue or target.setWidgetValue)(target, change.id, change.value)
         end
         return
     end
     if change.kind == "mesh" then
-        local ____this_4
-        ____this_4 = target
-        local ____opt_3 = ____this_4.setMeshValue
-        if ____opt_3 ~= nil then
-            ____opt_3(____this_4, change.id, change.property, change.value)
+        local ____this_3
+        ____this_3 = target
+        local ____opt_2 = ____this_3.setMeshValue
+        if ____opt_2 ~= nil then
+            ____opt_2(____this_3, change.id, change.property, change.value)
         end
         return
     end
     for ____, owner in ipairs(change.owners) do
-        local ____this_6
-        ____this_6 = target
-        local ____opt_5 = ____this_6.setShaderParameters
-        if ____opt_5 ~= nil then
-            ____opt_5(____this_6, owner, change.parameters)
+        local ____this_5
+        ____this_5 = target
+        local ____opt_4 = ____this_5.setShaderParameters
+        if ____opt_4 ~= nil then
+            ____opt_4(____this_5, owner, change.parameters)
         end
     end
 end
@@ -41243,6 +47303,13 @@ local function attach(self, state, target)
         return target:update({svg = result.svg})
     end
     state.listeners:add(listener)
+    local function reset()
+        local ____this_7
+        ____this_7 = target
+        local ____opt_6 = ____this_7.clearOverrides
+        return ____opt_6 and ____opt_6(____this_7)
+    end
+    state.resetListeners:add(reset)
     for ____, binding in ipairs(state.graph.bindings) do
         state.dirty:add(binding)
     end
@@ -41250,6 +47317,7 @@ local function attach(self, state, target)
     return function()
         state.listeners:delete(listener)
         state.liveListeners:delete(send)
+        state.resetListeners:delete(reset)
     end
 end
 function ____exports.createBindingRuntime(self, sfl, options)
@@ -41287,6 +47355,8 @@ function ____exports.createBindingRuntime(self, sfl, options)
         {
             diagnostics = state.diagnostics,
             registerSource = function(____, name, source) return registerSource(nil, state, name, source) end,
+            check = function(____, sfl) return checkDocument(nil, state, sfl) end,
+            replace = function(____, sfl) return replaceDocument(nil, state, sfl) end,
             setElementState = function(____, id, patch) return setElementState(nil, state, id, patch) end,
             press = function(____, id) return pressElement(nil, state, id) end,
             release = function(____, id, tapped) return releaseElement(nil, state, id, tapped) end,
@@ -41308,7 +47378,10 @@ function ____exports.createBindingRuntime(self, sfl, options)
                 dispatch(nil, state, id, "onDrag")
             end,
             tick = function(____, seconds) return runTick(nil, state, seconds) end,
-            flush = function() return flush(nil, state) end,
+            flush = function()
+                remakeNow(nil, state)
+                return flush(nil, state)
+            end,
             onRender = function(self, listener)
                 state.listeners:add(listener)
                 return function() return state.listeners:delete(listener) end
@@ -41336,12 +47409,12 @@ function ____exports.renderBound(self, sfl, options)
     if options == nil then
         options = {}
     end
-    local ____options_7 = options
-    local data = ____options_7.data
+    local ____options_8 = options
+    local data = ____options_8.data
     if data == nil then
         data = {}
     end
-    local renderOptions = __TS__ObjectRest(____options_7, {data = true})
+    local renderOptions = __TS__ObjectRest(____options_8, {data = true})
     local runtime = ____exports.createBindingRuntime(nil, sfl, {renderOptions = renderOptions})
     for ____, ____value in ipairs(__TS__ObjectEntries(data)) do
         local name = ____value[1]

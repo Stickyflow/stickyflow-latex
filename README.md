@@ -8,8 +8,9 @@ their sliders move, their drawings follow.
 
 ## Use it
 
-1. Put the two files from `dist/` next to your document: `stickyflow.sty` and `stickyflow.lua`. In Overleaf, upload them into the project
-   once.
+1. Put the two files `stickyflow.sty` and `stickyflow.lua` next to your document. They are in the zip of every
+   [release](https://github.com/Stickyflow/stickyflow-latex/releases), and in `dist/` here. In Overleaf, upload them into the project once.
+   Where the package comes with the TeX distribution, this step falls away.
 2. Compile with LuaLaTeX. In Overleaf: Menu, Compiler, LuaLaTeX.
 3. Load the package and write a figure into the document:
 
@@ -84,8 +85,22 @@ cd examples
 TEXINPUTS="../dist:" LUAINPUTS="../dist:" lualatex section-study.tex
 ```
 
+## Release
+
+```bash
+npm run build
+npm run pack
+```
+
+`npm run pack` compiles the documentation in `doc/` with LuaLaTeX and writes `release/stickyflow.zip`: the two files, the documentation as
+PDF, the examples, this README, the changelog and the license. The same zip goes to a GitHub release and to CTAN.
+
 ## Not yet
 
 - Gradients are drawn in their middle color.
 - Shaders and inputs, which only a browser draws.
 - Only the first 3D scene of a figure gets the still picture; further ones are a frame in print.
+
+## License
+
+Apache License 2.0, see `LICENSE`. The translated core comes from stickyflow.js, which is licensed under the same license.

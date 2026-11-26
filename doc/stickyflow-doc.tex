@@ -1,0 +1,168 @@
+\documentclass{article}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{alltt}
+\usepackage[hidelinks]{hyperref}
+\usepackage{stickyflow}
+
+\title{The stickyflow package}
+\author{Stickyflow}
+\date{Version 0.1.0, 26 November 2026}
+
+% Listings show the environment with \textbackslash{}begin, so the package does not take them for a figure.
+\newenvironment{code}{\par\smallskip\begin{alltt}\small}{\end{alltt}\smallskip}
+
+\begin{document}
+\maketitle
+
+\section{What it does}
+
+The stickyflow package draws figures written in SFL while a document compiles with LuaLaTeX. SFL is a language that describes a visual
+artifact in text: its elements, what they mean, how they relate, where they sit and how they look. A chart, a diagram, a plan or an
+interface is one block of SFL, and the package turns that block into a figure of the document.
+
+The figure is drawn by the renderer of stickyflow.js itself, translated to Lua, so it looks the same in the PDF as in a browser. Its texts
+are set by TeX in the fonts of the document. The PDF also carries the SFL of every figure, its data and its place on the page, so a viewer
+that knows SFL can make the figure live again.
+
+\begin{center}
+\begin{sfl}[0.6\linewidth]
+sfl 1.6
+
+Model board {
+  Chart skills {
+    type: radar
+    text: "Team profile"
+    areaOpacity: 0.22
+    categories: ["Speed", "Quality", "Cost", "Reliability", "Support", "Reach"]
+
+    data {
+      Axis value { min: 0; max: 10; step: 2 }
+
+      now { label: "Today"; values: [8, 7, 5, 9, 6, 7]; color: "#0d9488" }
+      goal { label: "Target"; values: [9, 9, 7, 8, 9, 8]; color: "#f4694c" }
+    }
+
+    style {
+      radarStrokeWidth: 2.5
+      radarPointSize: 4
+      gridColor: "#e5e7eb"
+      textColor: "#111827"
+      showLegend: true
+      cornerRadius: 14
+      strokeWidth: 1
+      stroke: "#e5e7eb"
+      fill: "#ffffff"
+    }
+    layout {
+      position: 0, 0
+      size: 560, 440
+    }
+  }
+}
+\end{sfl}
+\end{center}
+
+The figure above is written in the source of this documentation.
+
+\section{Requirements}
+
+The package needs LuaLaTeX. It does not need shell escape and runs no program outside TeX, so it also works on Overleaf, where the compiler
+is chosen under Menu, Compiler, LuaLaTeX. It loads \texttt{iftex}, \texttt{xcolor} and \texttt{graphicx}.
+
+The package consists of two files, \texttt{stickyflow.sty} and \texttt{stickyflow.lua}. Where the package is not installed with the TeX
+distribution, put both next to the document, or upload them into the Overleaf project.
+
+\section{Figures in the document}
+
+Load the package and write the SFL of a figure between \texttt{\textbackslash{}begin\{sfl\}} and \texttt{\textbackslash{}end\{sfl\}}:
+
+\begin{code}
+\textbackslash{}usepackage\{stickyflow\}
+...
+\textbackslash{}begin\{sfl\}[0.8\textbackslash{}linewidth]
+sfl 1.6
+
+Model board \{
+  ...
+\}
+\textbackslash{}end\{sfl\}
+\end{code}
+
+The optional argument is the width of the figure. Without it the figure is as wide as the line. The figure keeps its proportions, so its
+height follows from the width.
+
+The lines of the environment are read before TeX sees them. Braces, hash signs and percent signs therefore stay what they are in SFL and
+need no escaping. For the same reason the environment cannot stand inside the argument of another command. Inside a \texttt{figure} or a
+\texttt{center} environment it is fine.
+
+\section{Data}
+
+A figure with data sources gets its rows as JSON after a line of three dashes:
+
+\begin{code}
+\textbackslash{}begin\{sfl\}[0.8\textbackslash{}linewidth]
+sfl 1.10
+
+DataSource sales \{
+  mode: table
+  fields \{ quarter: string; amount: number \}
+\}
+...
+---
+\{ "sales": [\{ "quarter": "Q1", "amount": 42 \}, \{ "quarter": "Q2", "amount": 55 \}] \}
+\textbackslash{}end\{sfl\}
+\end{code}
+
+The figure is drawn with these rows and with the values its parameters start with.
+
+\section{Figures from files}
+
+A figure can stay in a file of its own, with its data in another:
+
+\begin{code}
+\textbackslash{}sflinput[0.62\textbackslash{}linewidth]\{section-study.sfl\}
+\textbackslash{}sflinput[0.8\textbackslash{}linewidth][revenue.json]\{revenue.sfl\}
+\end{code}
+
+The first optional argument is the width, the second the file with the rows of the data sources. Unlike the environment,
+\texttt{\textbackslash{}sflinput} can stand anywhere a box can.
+
+\section{Scenes in three dimensions}
+
+Only a browser draws a scene in three dimensions, so in print such a scene is a still picture set into its place. Give the picture as the
+third optional argument, or put a picture with the name of the SFL file next to it, such as \texttt{robot-line.png} for
+\texttt{robot-line.sfl}:
+
+\begin{code}
+\textbackslash{}sflinput[0.9\textbackslash{}linewidth]\{robot-line.sfl\}
+\textbackslash{}sflinput[0.9\textbackslash{}linewidth][][still.png]\{robot-line.sfl\}
+\textbackslash{}begin\{sfl\}[0.9\textbackslash{}linewidth][][still.png] ... \textbackslash{}end\{sfl\}
+\end{code}
+
+The models a scene names are attached to the PDF. The package finds a model by its path, or by the last part of the path, so
+\texttt{/models/robot.glb} is also found as \texttt{robot.glb} next to the document.
+
+\section{Live figures}
+
+After the last page the package attaches a file \texttt{stickyflow.json} to the PDF. It holds the SFL, the data and the place on the page of
+every figure. A viewer that reads it can draw the figures again and let them react: sliders move, and what is bound to them follows.
+Controls such as sliders are left out of print.
+
+\section{Limits}
+
+Gradients are drawn in their middle color. Shaders and input fields, which only a browser draws, are left out. Only the first scene in
+three dimensions of a figure gets the still picture; further ones are a frame in print.
+
+\section{How it is made}
+
+The static core of stickyflow.js, which renders SFL to SVG without a browser, is translated to Lua with TypeScriptToLua.
+\texttt{stickyflow.lua} holds that core and the part that draws the SVG as PDF operators: paths, shapes, arcs, arrow heads, clips, dashes
+and transparency. Shapes go into forms with their own resources, so the resources of the page stay as other packages set them. The sources
+and the build are at \url{https://github.com/Stickyflow/stickyflow-latex}.
+
+\section{License}
+
+The package is licensed under the Apache License 2.0. The translated core comes from stickyflow.js, which is licensed under the same
+license.
+
+\end{document}
