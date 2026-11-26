@@ -10,3 +10,7 @@ doc/*.log
 doc/*.out
 doc/*.pdf
 doc/*.toc
+# The figures of the paper come from the SFL gallery (npm run paper), as do the package files beside it.
+examples/paper/*
+!examples/paper/paper.tex
+!examples/paper/figures.txt

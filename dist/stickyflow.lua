@@ -47876,6 +47876,12 @@ function stickyflow.draw(svg, width, mark, picture)
   local vx, vy, vw, vh = vb[1], vb[2], vb[3], vb[4]
   local scale = (width or vw) / vw
   local height = vh * scale
+  -- A figure without a 3D scene that is given a picture is that picture in print, for what only a browser draws, as a shader.
+  if picture and not svg:find('data%-sf%-mesh%-stage') then
+    local w = f(vw * scale)
+    local box = string.format('\\hbox to %sbp{\\vbox to %sbp{\\vss\\hbox{%s\\includegraphics[width=%sbp,height=%sbp]{%s}}}}', w, f(height), mark or '', w, f(height), picture)
+    return box, vw * scale, height
+  end
   local gradients, clips, markers = {}, {}, {}
   local out = {}
 

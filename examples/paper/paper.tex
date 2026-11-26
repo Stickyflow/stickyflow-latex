@@ -1,0 +1,146 @@
+\documentclass[11pt]{article}
+\usepackage[a4paper,margin=2.2cm]{geometry}
+\usepackage[section]{placeins}
+\usepackage[hidelinks]{hyperref}
+\usepackage{stickyflow}
+
+\title{\bfseries Figures that answer back}
+\author{A sample paper written with the stickyflow package for LuaLaTeX}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Every figure in this paper is written in SFL, a language that describes a visual artifact in text: its parts, what they mean, how
+they relate, where they sit and how they look. The figures are drawn while the document compiles, in the fonts of the document, and the
+PDF carries their source. In print they are ordinary figures. Opened in a viewer that reads SFL, they come alive: a slider changes a
+distribution, a section is turned, an instrument runs. The paper shows charts, a field of data in three dimensions, instruments,
+drawings that compute their own measures, and an object in three dimensions.
+\end{abstract}
+
+\section{Introduction}
+
+A figure in a paper is usually the end of a process that happened somewhere else. The data was plotted by one program, the drawing
+made in another, and what arrives in the document is a picture. Whoever reads the paper cannot ask the figure anything: not what lies
+under a point, not what happens if a parameter changes.
+
+The figures here take another way. Each one is a short text in SFL, kept with the document. The renderer that draws it in a browser
+also draws it in the PDF, so both look alike. The text travels inside the PDF, and a viewer that knows SFL draws the figure again and
+lets it react. The printed page stays an ordinary page.
+
+\section{Data at a glance}
+
+Figure~\ref{fig:charts} shows six common forms side by side: a series over time, a ranking, a cloud of points, the spread of a
+measure, a matrix of scores and the density of two measures. Each is a few dozen lines of SFL with its data written in.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.32\textwidth]{line.sfl}\hfill
+\sflinput[0.32\textwidth]{bars.sfl}\hfill
+\sflinput[0.32\textwidth]{scatter.sfl}\\[6pt]
+\sflinput[0.32\textwidth]{boxplot.sfl}\hfill
+\sflinput[0.32\textwidth]{heatmap.sfl}\hfill
+\sflinput[0.32\textwidth]{hexbin.sfl}
+\caption{Six forms of data. Top: a series over a year against the year before, a ranking by month, a cloud of points colored by
+its position. Bottom: visitors per day as boxes with every point, focus scores of six teams over eight weeks, and the density of two
+measures in hexagonal bins.}
+\label{fig:charts}
+\end{figure}
+
+Flows and parts of a whole are read better in other forms. Figure~\ref{fig:flow} follows energy from its sources through the grid to
+where it is used. Figure~\ref{fig:parts} compares profiles and shares.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.75\textwidth]{sankey.sfl}
+\caption{Where the power comes from and where it goes. The width of every band is the energy it carries.}
+\label{fig:flow}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.32\textwidth]{radar.sfl}\hfill
+\sflinput[0.32\textwidth]{polar.sfl}\hfill
+\sflinput[0.32\textwidth]{rings.sfl}\\[6pt]
+\sflinput[0.49\textwidth]{treemap.sfl}\hfill
+\sflinput[0.49\textwidth]{mekko.sfl}
+\caption{Profiles and shares. Top: a team profile today and as targeted, strengths as a polar area, and three goals of a day as
+rings. Bottom: a month of spending as nested areas, and market shares by category, where the width of a column is the size of its
+category.}
+\label{fig:parts}
+\end{figure}
+
+\section{A field in three dimensions}
+
+Some data has a place. Figure~\ref{fig:field} shows the density of a mixture of three normal distributions on a grid of 36 by 36
+cells, as a field of columns whose height and color are the density. In print the field is a still picture. In the viewer it can be
+turned, and two sliders change the spread of the three populations and the height of the columns.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.8\textwidth]{density-skyline.sfl}
+\caption{Three populations, one field. The camera takes in a room as high as the highest column can grow, so the view keeps its
+size while the columns rise and fall.}
+\label{fig:field}
+\end{figure}
+
+\section{Instruments}
+
+An interface is a figure too. The three watch faces in Figure~\ref{fig:watches} are written in SFL, with their data sources and the
+shaders that fill them. Shaders only run in a browser, so print shows a picture of each face, and the viewer shows the face itself,
+running.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.27\textwidth][][weather-watch.png]{weather-watch.sfl}\hfill
+\sflinput[0.27\textwidth][][plasma-watch.png]{plasma-watch.sfl}\hfill
+\sflinput[0.27\textwidth][][halftone-watch.png]{halftone-watch.sfl}
+\caption{Three watch faces: the weather over a moving sea, a battery as a plasma gauge, and the time in halftone dots.}
+\label{fig:watches}
+\end{figure}
+
+\section{Drawings that compute}
+
+A construction drawing is a set of measures. When the measures are written as expressions, the drawing follows them.
+Figure~\ref{fig:letter} builds a capital letter on a grid of 50 units, with its metrics, its circles, the handles of its curves and four
+steps from the stem to the leg.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.62\textwidth]{letter.sfl}
+\caption{How a capital is built: cap height, bowl and baseline, the circles of the bowl and the counter, and the angle of the leg.}
+\label{fig:letter}
+\end{figure}
+
+Figure~\ref{fig:house} is a study of a house on rails: three buildings in a row and a shell of larch that rides over them. Plan,
+elevation and section come from one set of parameters. In the viewer the shell slides along its rails, the doors of the glasshouse
+open, the car leaves the garage, and the hour moves the sun, the shadows and the light in the windows.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[\textwidth]{sliding-house.sfl}
+\caption{A study after a house with a sliding shell, drawn from its parameters: ground floor plan, north elevation on the axes of the
+plan, and a section across.}
+\label{fig:house}
+\end{figure}
+
+\section{An object in three dimensions}
+
+The last figure is an instrument of another kind: a synthesizer, built from solids with keys that go down and a panel drawn on its
+case. Its models are attached to the PDF, so the viewer can draw it and let it be turned.
+
+\begin{figure}[htbp]
+\centering
+\sflinput[0.9\textwidth][][juno.png]{juno.sfl}
+\caption{A synthesizer of the eighties in three dimensions. In print a still picture of the scene; in the viewer the scene itself.}
+\label{fig:juno}
+\end{figure}
+
+\section{Conclusion}
+
+Written as text, a figure can be read, reviewed and changed like the rest of a paper, and it keeps the meaning of its parts. Drawn by
+the same renderer in print and on screen, it looks the same in both. Carried inside the PDF, it can be asked questions long after the
+paper was printed.
+
+\end{document}
