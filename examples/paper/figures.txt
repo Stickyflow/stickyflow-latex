@@ -1,25 +1,14 @@
 # The figures of the paper: the name the paper uses, and the file in the SFL gallery it is taken from.
 # npm run paper copies them next to paper.tex; the gallery is ../SFL-Gallery, or the folder in SFL_GALLERY.
-line.sfl charts/line/examples/paper.sfl
-bars.sfl charts/bar/examples/mono-light.sfl
-scatter.sfl charts/scatter/examples/cloud-light.sfl
-boxplot.sfl charts/boxplot/examples/spread-light.sfl
-heatmap.sfl charts/heatmap/examples/dots-light.sfl
-hexbin.sfl charts/hexbin/examples/density-light.sfl
-sankey.sfl charts/sankey/examples/energy-light.sfl
-radar.sfl charts/radar/examples/skills-light.sfl
-polar.sfl charts/polarArea/examples/bloom-light.sfl
-rings.sfl charts/radialBar/examples/rings-light.sfl
-treemap.sfl charts/treemap/examples/ledger-light.sfl
-mekko.sfl charts/mekko/examples/share-light.sfl
+decay-fit.sfl science2d/decay-fit.sfl
+decay-fit.json science2d/decay-fit.json
+interference.sfl science2d/interference.sfl
 density-skyline.sfl science3d/density-skyline.sfl
+sliding-house.sfl planner/sliding-house.sfl
 weather-watch.sfl interfaces/dark/weather-watch.sfl
 weather-watch.png interfaces/dark/weather-watch.png
 plasma-watch.sfl interfaces/dark/plasma-watch.sfl
 plasma-watch.png interfaces/dark/plasma-watch.png
 halftone-watch.sfl interfaces/dark/halftone-watch.sfl
 halftone-watch.png interfaces/dark/halftone-watch.png
-letter.sfl planner/letter-construction.sfl
-sliding-house.sfl planner/sliding-house.sfl
 juno.sfl space3d/synth-juno-106.sfl
-juno.png space3d/synth-juno-106.png
