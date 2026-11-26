@@ -3,6 +3,7 @@
 decay-fit.sfl science2d/decay-fit.sfl
 decay-fit.json science2d/decay-fit.json
 density-skyline.sfl science3d/density-skyline.sfl
+density-skyline.png science3d/density-skyline.png
 sliding-house.sfl planner/sliding-house.sfl
 city-block.sfl planner/city-block.sfl
 robot-line.sfl space3d/robot-line.sfl
@@ -14,3 +15,4 @@ weather-watch.json interfaces/dark/weather-watch.json
 plasma-watch.sfl interfaces/dark/plasma-watch.sfl
 plasma-watch.png interfaces/dark/plasma-watch.png
 juno.sfl space3d/synth-juno-106.sfl
+juno.png space3d/synth-juno-106.png
