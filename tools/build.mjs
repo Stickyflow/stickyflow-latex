@@ -71,11 +71,14 @@ if (!existsSync(join(BUILD, 'out/stickyflow-core.lua'))) {
 rmSync(DIST, { recursive: true, force: true })
 mkdirSync(DIST, { recursive: true })
 const version = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8')).version
+const libraryPackage = join(LIBRARY, '../package.json')
+const library = existsSync(libraryPackage) ? JSON.parse(readFileSync(libraryPackage, 'utf8')).version : 'unknown'
 const core = readFileSync(join(BUILD, 'out/stickyflow-core.lua'), 'utf8')
 const loader = readFileSync(join(ROOT, 'lua/stickyflow.lua'), 'utf8')
 writeFileSync(
   join(DIST, 'stickyflow.lua'),
-  `-- stickyflow ${version} for LuaLaTeX. Built from the sources of stickyflow.js; do not edit, see https://github.com/Stickyflow/stickyflow-latex.\n` +
+  `-- stickyflow ${version} for LuaLaTeX, licensed under the Apache License 2.0.\n` +
+    `-- Built from the sources of stickyflow.js ${library}; do not edit, see https://github.com/Stickyflow/stickyflow-latex.\n` +
     `package.preload['stickyflow-core'] = function(...)\n${core}\nend\n\n${loader}`,
 )
 cpSync(join(ROOT, 'tex/stickyflow.sty'), join(DIST, 'stickyflow.sty'))
