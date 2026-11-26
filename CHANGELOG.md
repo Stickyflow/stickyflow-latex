@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0, 26 November 2026
+
+- A figure without a scene in three dimensions that is given a picture is that picture in print, for what only a browser draws, as
+  a shader. Its source still travels with the page, so a viewer draws it live.
+- `examples/paper`: a sample paper in two columns with seven interactive figures, from a model fitted by hand to a synthesizer in
+  three dimensions. Its figures come from the SFL gallery; the zip holds them and the compiled paper.
+
 ## 0.1.1, 26 November 2026
 
 - A figure whose bindings call a math function such as `max`, `sin` or `round` is drawn again. In 0.1.0 it stopped the document with an error about `Array`.

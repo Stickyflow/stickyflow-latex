@@ -1,4 +1,4 @@
--- stickyflow 0.1.1 for LuaLaTeX, licensed under the Apache License 2.0.
+-- stickyflow 0.2.0 for LuaLaTeX, licensed under the Apache License 2.0.
 -- Built from the sources of stickyflow.js 0.23.1; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
 package.preload['stickyflow-core'] = function(...)
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
@@ -47359,6 +47359,7 @@ function ____exports.createBindingRuntime(self, sfl, options)
         {
             diagnostics = state.diagnostics,
             registerSource = function(____, name, source) return registerSource(nil, state, name, source) end,
+            sourceOf = function(____, name) return state.sources:get(name) end,
             check = function(____, sfl) return checkDocument(nil, state, sfl) end,
             replace = function(____, sfl) return replaceDocument(nil, state, sfl) end,
             setElementState = function(____, id, patch) return setElementState(nil, state, id, patch) end,
