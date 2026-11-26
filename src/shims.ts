@@ -495,6 +495,11 @@ export function __is(a: unknown, b: unknown): boolean {
   return a === b || (a !== a && b !== b);
 }
 
+// Array.isArray handed on as a function, as in values.some(Array.isArray): Lua has no Array to take it from.
+export function __isArray(value: unknown): boolean {
+  return Array.isArray(value);
+}
+
 export function __isFinite(value: unknown): boolean {
   return typeof value === 'number' && value === value && value !== Infinity && value !== -Infinity;
 }
