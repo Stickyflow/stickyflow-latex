@@ -20,7 +20,7 @@
 % The note above every figure lies on the layer stickyflow-hint. Every reader shows it; the stickyflow extension hides it, because there
 % the figure speaks for itself.
 \newcommand\sflhint{%
-  \par\hfill\begin{ocg}{stickyflow-hint}{sflhint}{1}\textcolor{hint}{\itshape\footnotesize Interactive figure: open this PDF with the
+  \par\vspace{4pt}\hfill\begin{ocg}{stickyflow-hint}{sflhint}{1}\textcolor{hint}{\itshape\footnotesize Interactive figure: open this PDF with the
   stickyflow extension}\end{ocg}\par\smallskip}
 
 \lstset{basicstyle=\ttfamily\scriptsize, columns=fullflexible, keepspaces=true, frame=tb, framerule=0.4pt, backgroundcolor=\color{code},
@@ -58,9 +58,9 @@
       LuaLaTeX that draws figures written in a small drawing language while the document compiles, in the fonts of the document,
       and carries the source of every figure, its data and its parameters inside the PDF. Every reader shows the figures as ordinary
       pictures. A reader with a small viewer draws the same figures live in their places and lets them answer: a model can be
-      fitted to measurements by hand, the sources of an interference pattern moved apart, a field of densities turned in three
-      dimensions. We show six figures, from a fitted curve to an instrument with a keyboard, and describe how a source becomes a
-      page and what stays a picture in print.
+      fitted to measurements by hand, a field of densities turned in three dimensions, the streets of a district widened. We show
+      seven figures, from a fitted curve to an instrument with a keyboard, and describe how a source becomes a page and what stays a
+      picture in print.
       \par\medskip
       \textbf{Keywords:} \textit{interactive figures, LuaLaTeX, parametric drawings, data binding, portable documents, reproducible
       papers}
@@ -81,12 +81,13 @@
 reader they are pictures.}
 \renewcommand{\thefootnote}{\arabic{footnote}}
 
+
 \section{Introduction}
 
 Most scientific papers are written in LaTeX, and most of their figures are made somewhere else. A curve is fitted in one program,
 exported as a picture and placed on the page; a drawing is made in another and placed beside it. What reaches the reader is the last
-state of that work. A reader who wonders how good the fit really is, or what the pattern would look like with the sources closer
-together, has to find the data, rebuild the figure and hope that it matches what the authors drew.
+state of that work. A reader who wonders how good the fit really is, or what a plan would look like with wider streets, has to find the
+data, rebuild the figure and hope that it matches what the authors drew.
 
 \begin{figure*}[t]
 \sflhint
@@ -119,6 +120,16 @@ inserted picture never does. They describe pictures, however, not figures that r
 a parameter a reader could move later. Plots made by statistics programs and inserted as pictures carry even less; their data stays
 behind on the computer of the author.
 
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[\textwidth]{density-skyline.sfl}
+\caption{Three populations, one field. The density of a mixture of three normal distributions as 1\,296 columns, whose height and
+color are the density. Drag to turn the field; the sliders below it set the spread of the populations and the height of the columns.
+In print a still picture of the scene.}
+\label{fig:field}
+\end{figure*}
+
 Inside the PDF, form fields and document scripts can change what a page shows, but each reader supports a different part of them, and
 a figure has to be rebuilt from parts that were made for forms. Embedded media can carry a model or a movie, but they are opaque: they
 cannot be bound to the data of the paper and cannot be read as text. Computational notebooks ship the whole analysis, which is
@@ -128,23 +139,23 @@ The approach here sits between these routes. It ships no more than the figure, k
 in the fonts of the document, and leaves it readable as text, so that good design of figures in the sense of~\cite{tufte} is not
 traded for interaction.
 
-\begin{figure*}[t]
-\sflhint
-\centering
-\sflinput[0.86\textwidth]{interference.sfl}
-\caption{Two sources, one pattern. The sum of two waves on a grid of 96 by 52 cells, from Equation~\ref{eq:waves}: magenta where
-crests meet, blue where troughs meet, white where they cancel. The sliders below the field set the distance of the sources and the
-wavelength.}
-\label{fig:waves}
-\end{figure*}
-
 \section{Figures as sources}
 
 A figure in SFL is a set of named blocks. A \texttt{Shape}, a \texttt{Text} or a \texttt{Path} is placed in its \texttt{layout} and
-dressed in its \texttt{style}; a \texttt{Chart} draws series from data; a \texttt{Scene} holds solids in three dimensions. Two blocks
-make a figure more than a picture. A \texttt{DataSource} declares the rows a figure is drawn from, so a plot is bound to a table
-instead of to fixed points. A block of \texttt{Parameters} names the numbers a figure is computed from, with a range and a step for
-each that a reader may move.
+dressed in its \texttt{style}; a \texttt{Chart} draws series from data; a \texttt{Scene} holds solids and models in three dimensions.
+Two blocks make a figure more than a picture. A \texttt{DataSource} declares the rows a figure is drawn from, so a plot is bound to a
+table instead of to fixed points. A block of \texttt{Parameters} names the numbers a figure is computed from, with a range and a step
+for each that a reader may move.
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[\textwidth]{sliding-house.sfl}
+\caption{A house on rails, after a house with a sliding shell. Ground floor plan, north elevation on the axes of the plan and a section,
+all from one set of parameters. The sliders below the drawing move the shell, open the doors of the glasshouse, move the car and set
+the hour of the day.}
+\label{fig:house}
+\end{figure*}
 
 The parameters are the heart of a live figure. Every number of the drawing may be an expression of them, and a \texttt{Repeat} draws a
 block once for every row of a table or every cell of a grid, with variables of its own. Listing~\ref{lst:fit} shows the essential
@@ -192,10 +203,11 @@ that could fall out of step with it.
 \begin{figure*}[t]
 \sflhint
 \centering
-\sflinput[0.8\textwidth]{density-skyline.sfl}
-\caption{Three populations, one field. The density of a mixture of three normal distributions as 1\,296 columns. Drag to turn the
-field; the sliders below it set the spread and the height. In print a still picture of the scene.}
-\label{fig:field}
+\sflinput[0.86\textwidth]{city-block.sfl}
+\caption{City block. A district of blocks around a central hall, with a plan of one block, a street in section and a section through
+the hall. The number of blocks across and down, the size of a block, the width of the streets, the depth of the buildings and the
+storeys are parameters, and their sliders sit in the band below the plan.}
+\label{fig:city}
 \end{figure*}
 
 \section{From source to page}
@@ -207,16 +219,25 @@ that the resources of the page stay as other packages set them. Texts are not dr
 document, at the place and size the renderer gave them. A figure therefore looks as it does in the browser and reads like the page
 around it.
 
-A figure is written either in the document, between \texttt{\textbackslash{}begin\{sfl\}} and \texttt{\textbackslash{}end\{sfl\}}, or in a file of its own. Listing~\ref{lst:tex}
-shows the second way for the fitted curve, whose measurements come from a file of JSON, and for a figure in three dimensions with the
-still picture it shows in print.
+A figure is written either in the document, between \texttt{\textbackslash{}begin\{sfl\}} and \texttt{\textbackslash{}end\{sfl\}}, or
+in a file of its own. Listing~\ref{lst:tex} shows the second way for the fitted curve, whose measurements come from a file of JSON, and
+for the hall of robots, whose scene shows a still picture in print and whose model is attached to the PDF.
 
-\begin{lstlisting}[float=t,caption={Two figures of this paper in the document: the fitted curve with its table, and the field of densities with its still picture.},label={lst:tex}]
+\begin{lstlisting}[float=t,caption={Two figures of this paper in the document: the fitted curve with its table, and the hall of robots with the still picture of its scene.},label={lst:tex}]
 \usepackage{stickyflow}
 ...
 \sflinput[\textwidth][decay-fit.json]{decay-fit.sfl}
-\sflinput[0.8\textwidth][][skyline.png]{density-skyline.sfl}
+\sflinput[0.8\textwidth][][robot-line.png]{robot-line.sfl}
 \end{lstlisting}
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[0.78\textwidth][][robot-line.png]{robot-line.sfl}
+\caption{Robot line. A production hall in three dimensions, made from one attached model in a repeat. Drag to turn the scene; the
+sliders below it set the robots across, the rows, their distance and the turn of each robot. In print a still picture of the scene.}
+\label{fig:robots}
+\end{figure*}
 
 After the last page the package attaches one file to the PDF. For every figure it holds the page, the rectangle of the picture in
 points, the source, the data, and the names of further files such as models, which are attached as well. A viewer places a figure over
@@ -233,17 +254,26 @@ Not everything a browser draws can be printed. A scene in three dimensions and a
 hardware of a browser, and TeX has none. For these the author gives a still picture, and print shows it in the place of the scene or of
 the whole figure, while the source still travels with the page.
 
-\section{Six figures}
-
 \begin{figure*}[t]
+\vspace{10pt}
 \sflhint
 \centering
-\sflinput[\textwidth]{sliding-house.sfl}
-\caption{A house on rails, after a house with a sliding shell. Ground floor plan, north elevation on the axes of the plan and a section,
-all from one set of parameters. The sliders below the drawing move the shell, open the doors of the glasshouse, move the car and set
-the hour of the day.}
-\label{fig:house}
+\begin{minipage}[t]{0.3\textwidth}
+\centering
+\sflinput[\linewidth][weather-watch.json][weather-watch.png]{weather-watch.sfl}\\[6pt]
+{\small (a) The weather over a moving sea.}
+\end{minipage}\hspace{0.1\textwidth}%
+\begin{minipage}[t]{0.3\textwidth}
+\centering
+\sflinput[\linewidth][][plasma-watch.png]{plasma-watch.sfl}\\[6pt]
+{\small (b) A battery as a plasma gauge.}
+\end{minipage}
+\caption{Two instruments. Each face is a source with its data and its shader. In the viewer they run: the sea moves, the battery
+charges, its number rolls and its scale fills, and the time is the time of the reader. In print each face is a still picture.}
+\label{fig:watches}
 \end{figure*}
+
+\section{Seven figures}
 
 \subsection{A model fitted by hand}
 
@@ -251,30 +281,15 @@ Figure~\ref{fig:fit} shows the concentration of a drug in the blood after a sing
 the model of Equation~\ref{eq:model} drawn over it~\cite{gibaldi}. The measurements are a table that travels with the figure; the
 curve, the residuals and the half-life are computed from three parameters. In the viewer, three sliders below the plot set the
 amount, the rate and the floor. A reader can bring the curve to the points by hand, watch the residuals shrink, and see at once how
-strongly the half-life depends on the rate, which is the point the figure is made for.
-
-\subsection{A pattern drawn cell by cell}
-
-Figure~\ref{fig:waves} is not a plot of data but a computation shown as a picture. Two sources send out waves of the same length, and
-every cell of a grid of 96 by 52 takes the sum of both at its place,
-\begin{equation}
-  v = \tfrac{1}{2}\left( \sin \frac{2\pi d_1}{\lambda} + \sin \frac{2\pi d_2}{\lambda} \right) ,
-  \label{eq:waves}
-\end{equation}
-where $d_1$ and $d_2$ are the distances to the sources and $\lambda$ is the wavelength. Magenta marks crests meeting crests, blue
-troughs meeting troughs, white the places where they cancel. The pattern is the one Young described for light~\cite{young}. Its
-4\,992 cells are one \texttt{Repeat} of a few lines, and two sliders move the sources apart and change the wavelength; the bright fans
-open and close as the paths of the two waves differ by whole wavelengths.
+strongly the half-life of Equation~\ref{eq:half} depends on the rate, which is the point the figure is made for.
 
 \begin{figure*}[t]
 \sflhint
 \centering
-\sflinput[0.26\textwidth][weather-watch.json][weather-watch.png]{weather-watch.sfl}\hfill
-\sflinput[0.26\textwidth][][plasma-watch.png]{plasma-watch.sfl}\hfill
-\sflinput[0.26\textwidth][][halftone-watch.png]{halftone-watch.sfl}
-\caption{Three instruments: the weather over a moving sea, a battery as a plasma gauge, and the time in halftone dots. Each is a source
-with its data and its shader; in the viewer they run, in print each is a still picture.}
-\label{fig:watches}
+\sflinput[\textwidth]{juno.sfl}
+\caption{A synthesizer in three dimensions. Every fader and switch works and the keys go down; the panels below show the voice, the
+filter, the modulation and the envelope as the controls are moved. In print a still picture of the scene.}
+\label{fig:juno}
 \end{figure*}
 
 \subsection{A field in three dimensions}
@@ -293,21 +308,25 @@ glass. Plan, elevation and section come from one block of parameters, and four s
 of the glasshouse, drive the car out of the garage and set the hour, which moves the sun, the shadows and the light in the windows. The
 title block and the area of the floor are computed as well, so the drawing never disagrees with itself.
 
-\begin{figure*}[t]
-\sflhint
-\centering
-\sflinput[\textwidth]{juno.sfl}
-\caption{A synthesizer in three dimensions. Every fader and switch works and the keys go down; the panels below show the voice, the
-filter, the modulation and the envelope as the controls are moved. In print a still picture of the scene.}
-\label{fig:juno}
-\end{figure*}
+\subsection{A plan from repeated parts}
+
+Figure~\ref{fig:city} draws a district of blocks around a hall. The blocks are repeats of one block, the streets are the gaps between
+them, and the number of storeys sets the shade of each roof. Beside the plan stand the figures of the district, a plan of one block
+and a street in section, all computed from the same six parameters. It is the heaviest of the flat figures: a change of the number of
+blocks makes several hundred shapes anew.
+
+\subsection{A scene from one model}
+
+Figure~\ref{fig:robots} leaves the plane. A hall of robots is drawn from one model that is repeated in rows, and the model travels as an
+attachment of the document. In the viewer the scene can be turned and zoomed, and the robots across, the rows, their distance and the
+turn of each robot are parameters. In print the figure is a still picture of the same scene.
 
 \subsection{Instruments}
 
-An interface is a figure too. The three watch faces of Figure~\ref{fig:watches} are written in SFL, with data sources for the weather,
-the battery and the time, and with shaders that fill them: a moving sea, a plasma gauge, a field of halftone dots. In the viewer they
-run, the gauge follows the battery and the hands follow the clock. Shaders need a browser, so in print each face is its still picture,
-given to the figure as the third optional argument.
+An interface is a figure too. The two watch faces of Figure~\ref{fig:watches} are written in SFL, with data sources for the weather,
+the battery and the time, and with shaders that fill them. In the viewer they run: the sea moves, the battery charges and its number
+rolls, and the time is read from the clock of the reader. Shaders need a browser, so in print each face is its still picture, given
+to the figure as the third optional argument.
 
 \subsection{An object in three dimensions}
 
@@ -315,8 +334,8 @@ The last figure is an instrument of another kind. Figure~\ref{fig:juno} is a syn
 that go down, faders and switches that move, and panels below it that explain what each control does to the sound. It is the heaviest
 figure of the paper, more than three thousand lines of source, and still a single figure that travels in the PDF.
 
-Table~\ref{tab:figures} lists the size of the six figures. The flat figures are drawn in print as they are drawn on screen, with every
-shape; the figures in three dimensions and the instruments with shaders are pictures in print and live only in the viewer.
+Table~\ref{tab:figures} lists the size of the seven figures. The flat figures are drawn in print as they are drawn on screen, with
+every shape; the figures in three dimensions and the instruments with shaders are pictures in print and live only in the viewer.
 
 \begin{table}[t]
 \centering
@@ -328,10 +347,11 @@ shape; the figures in three dimensions and the instruments with shaders are pict
 Figure & Lines & Parameters & Shapes \\
 \midrule
 Fitted curve (Fig.~\ref{fig:fit}) & 295 & 3 & 221 \\
-Interference (Fig.~\ref{fig:waves}) & 140 & 2 & 5\,007 \\
 Field of densities (Fig.~\ref{fig:field}) & 159 & 2 & picture \\
 House on rails (Fig.~\ref{fig:house}) & 1\,620 & 4 & 868 \\
-Watch faces (Fig.~\ref{fig:watches}) & 563 & -- & picture \\
+City block (Fig.~\ref{fig:city}) & 1\,491 & 6 & 922 \\
+Robot line (Fig.~\ref{fig:robots}) & 156 & 4 & picture \\
+Watch faces (Fig.~\ref{fig:watches}) & 418 & -- & picture \\
 Synthesizer (Fig.~\ref{fig:juno}) & 3\,386 & 21 & picture \\
 \bottomrule
 \end{tabular}
@@ -340,10 +360,10 @@ Synthesizer (Fig.~\ref{fig:juno}) & 3\,386 & 21 & picture \\
 \section{Writing a live figure}
 
 A live figure is written the way a static one is drawn, only that its numbers get names. An author starts from the picture: the sheet,
-the shapes, the labels. Where a number is a choice rather than a fact, such as the rate of a model or the distance of two sources, it
-moves into the block of parameters, with a range and a step in a comment beside it, and the drawing refers to it by name. Data that was
-typed into the figure moves into a data source and into a file the document hands to the figure. At every step the figure can be
-compiled and looked at, and at no step does it stop being a picture.
+the shapes, the labels. Where a number is a choice rather than a fact, such as the rate of a model or the width of a street, it moves
+into the block of parameters, with a range and a step in a comment beside it, and the drawing refers to it by name. Data that was typed
+into the figure moves into a data source and into a file the document hands to the figure. At every step the figure can be compiled
+and looked at, and at no step does it stop being a picture.
 
 The controls come last. They are drawn into the figure like any other part and bound to a parameter with two arrows, so they share the
 style of the drawing they belong to. In print they are left out, and their labels show the values the figure was printed with.
@@ -372,19 +392,18 @@ already binds figures to shared data sources, so this is a question of the viewe
 
 A figure that carries its own source can be printed, archived and read like any other figure, and it can still answer when a reader
 asks. Written in the document and drawn by LuaLaTeX, it takes the fonts and the measure of the page; carried in the PDF, it comes alive
-in a viewer that knows its language. Six figures, from a fitted curve to a synthesizer, show that one small language covers the range
-of figures a scientific paper needs.
+in a viewer that knows its language. Seven figures, from a fitted curve to a synthesizer, show that one small language covers the
+range of figures a scientific paper needs.
 
 \begin{thebibliography}{9}
 \small
+\setlength{\itemsep}{1pt}
 \bibitem{iso} ISO 32000-2:2020. \emph{Document management -- Portable document format -- Part 2: PDF 2.0}. International Organization
 for Standardization, 2020.
 \bibitem{victor} B.~Victor. \emph{Explorable Explanations}. worrydream.com, 2011.
 \bibitem{tufte} E.~R.~Tufte. \emph{The Visual Display of Quantitative Information}. Graphics Press, 1983.
 \bibitem{luatex} The LuaTeX development team. \emph{LuaTeX Reference Manual}. 2023.
 \bibitem{gibaldi} M.~Gibaldi and D.~Perrier. \emph{Pharmacokinetics}. 2nd edition, Marcel Dekker, 1982.
-\bibitem{young} T.~Young. The Bakerian Lecture: Experiments and calculations relative to physical optics. \emph{Philosophical
-Transactions of the Royal Society of London} 94, 1--16, 1804.
 \bibitem{sfl} Stickyflow. \emph{SFL Specification}. stickyflow.org, 2026.
 \end{thebibliography}
 

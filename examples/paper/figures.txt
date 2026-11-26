@@ -2,14 +2,15 @@
 # npm run paper copies them next to paper.tex; the gallery is ../SFL-Gallery, or the folder in SFL_GALLERY.
 decay-fit.sfl science2d/decay-fit.sfl
 decay-fit.json science2d/decay-fit.json
-interference.sfl science2d/interference.sfl
 density-skyline.sfl science3d/density-skyline.sfl
 sliding-house.sfl planner/sliding-house.sfl
+city-block.sfl planner/city-block.sfl
+robot-line.sfl space3d/robot-line.sfl
+robot-line.png space3d/robot-line.png
+robot.glb space3d/robot.glb
 weather-watch.sfl interfaces/dark/weather-watch.sfl
 weather-watch.png interfaces/dark/weather-watch.png
 weather-watch.json interfaces/dark/weather-watch.json
 plasma-watch.sfl interfaces/dark/plasma-watch.sfl
 plasma-watch.png interfaces/dark/plasma-watch.png
-halftone-watch.sfl interfaces/dark/halftone-watch.sfl
-halftone-watch.png interfaces/dark/halftone-watch.png
 juno.sfl space3d/synth-juno-106.sfl
