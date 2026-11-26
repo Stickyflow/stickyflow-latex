@@ -1,0 +1,410 @@
+% A sample paper written with the stickyflow package. Every figure is SFL from the SFL gallery; npm run paper puts the files beside
+% this document. Compile with LuaLaTeX, twice.
+\documentclass[10pt,twocolumn]{article}
+\usepackage[a4paper,top=2.3cm,bottom=2.2cm,left=1.9cm,right=1.9cm,columnsep=0.7cm]{geometry}
+\usepackage{newtxtext,newtxmath}
+\usepackage[T1]{fontenc}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{fancyhdr}
+\usepackage{ocgx2}
+\usepackage[font=small,labelfont=bf,labelsep=period]{caption}
+\usepackage[hidelinks]{hyperref}
+\usepackage{stickyflow}
+
+\definecolor{hint}{rgb}{0.15,0.36,0.86}
+\definecolor{code}{rgb}{0.97,0.97,0.98}
+
+% The note above every figure lies on the layer stickyflow-hint. Every reader shows it; the stickyflow extension hides it, because there
+% the figure speaks for itself.
+\newcommand\sflhint{%
+  \par\vspace{4pt}\hfill\begin{ocg}{stickyflow-hint}{sflhint}{1}\textcolor{hint}{\itshape\footnotesize Interactive figure: open this PDF with the
+  stickyflow extension}\end{ocg}\par\smallskip}
+
+\lstset{basicstyle=\ttfamily\scriptsize, columns=fullflexible, keepspaces=true, frame=tb, framerule=0.4pt, backgroundcolor=\color{code},
+  xleftmargin=2pt, xrightmargin=2pt, aboveskip=8pt, belowskip=4pt, captionpos=b, upquote=true}
+\renewcommand{\lstlistingname}{Listing}
+
+% Wide figures may fill most of a page, two to a page, so that they stand near the text that speaks of them.
+\renewcommand{\dbltopfraction}{0.9}
+\renewcommand{\dblfloatpagefraction}{0.8}
+\setcounter{dbltopnumber}{2}
+\renewcommand{\textfraction}{0.1}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\itshape\small Live figures in LaTeX}
+\fancyhead[R]{\itshape\small Stickyflow \textperiodcentered{} 2026}
+\fancyfoot[C]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\makeatletter
+\renewcommand\maketitle{%
+  \twocolumn[{%
+    \centering
+    {\LARGE\bfseries Live figures in LaTeX: drawings that carry\\ their source into the PDF\par}
+    \vspace{10pt}
+    {\large Unknown Scientist\par}
+    {\itshape Stickyflow\par}
+    {\small November 2026\par}
+    \vspace{12pt}
+    \begin{minipage}{0.86\textwidth}
+      \small
+      \centerline{\bfseries Abstract}
+      \smallskip
+      A figure in a paper is the last picture of an analysis, and the reader cannot ask it anything. We describe a package for
+      LuaLaTeX that draws figures written in a small drawing language while the document compiles, in the fonts of the document,
+      and carries the source of every figure, its data and its parameters inside the PDF. Every reader shows the figures as ordinary
+      pictures. A reader with a small viewer draws the same figures live in their places and lets them answer: a model can be
+      fitted to measurements by hand, a field of densities turned in three dimensions, the streets of a district widened. We show
+      seven figures, from a fitted curve to an instrument with a keyboard, and describe how a source becomes a page and what stays a
+      picture in print.
+      \par\medskip
+      \textbf{Keywords:} \textit{interactive figures, LuaLaTeX, parametric drawings, data binding, portable documents, reproducible
+      papers}
+    \end{minipage}
+    \vspace{14pt}
+    \hrule
+    \vspace{14pt}
+  }]
+  \thispagestyle{fancy}
+}
+\makeatother
+
+\begin{document}
+\maketitle
+
+\renewcommand{\thefootnote}{\fnsymbol{footnote}}
+\footnotetext[1]{The figures of this paper are interactive when the PDF is opened with the stickyflow extension. In every other
+reader they are pictures.}
+\renewcommand{\thefootnote}{\arabic{footnote}}
+
+
+\section{Introduction}
+
+Most scientific papers are written in LaTeX, and most of their figures are made somewhere else. A curve is fitted in one program,
+exported as a picture and placed on the page; a drawing is made in another and placed beside it. What reaches the reader is the last
+state of that work. A reader who wonders how good the fit really is, or what a plan would look like with wider streets, has to find the
+data, rebuild the figure and hope that it matches what the authors drew.
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[0.82\textwidth][decay-fit.json]{decay-fit.sfl}
+\caption{A model fitted by hand. Concentration of a drug after a single dose, measured every hour, with the model $c(t) = a\,e^{-kt} +
+b$, a residual for every measurement and the half-life. The sliders below the plot set $a$, $k$ and $b$; curve, residuals and
+half-life follow while they move. The thirteen measurements travel with the figure.}
+\label{fig:fit}
+\end{figure*}
+
+The figures of this paper are made in another way. Each one is a short text in a drawing language, SFL~\cite{sfl}, that names the
+parts of the figure, where they sit, how they look, which data they are drawn from and which of their numbers a reader may change. The
+package \texttt{stickyflow} draws these texts while the document compiles. It needs no program outside of TeX and no shell escape, so
+it works wherever LuaLaTeX works, including services that compile in the browser.
+
+The page that comes out is an ordinary page. Next to every picture the PDF carries the source of the figure as an attachment, so that
+a viewer that knows the language can draw the figure again, live and in the same place, and let the reader move its parameters.
+Nothing is lost for anyone. A reader without the viewer sees the pictures and a short note above each of them; a reader with it sees
+figures that answer back.
+
+\section{Related approaches}
+
+The wish to let readers touch a figure is old. Essays on the web have shown for many years what a text can be when its numbers can be
+dragged and its diagrams follow~\cite{victor}. They live on web pages, however, and a web page is a poor archive: it depends on a
+server, on scripts that change and on links that break. Papers are exchanged as PDF because a PDF depends on none of these~\cite{iso}.
+
+Inside TeX, drawing languages have a long tradition, and plots written in them match the fonts and the measure of the page in a way an
+inserted picture never does. They describe pictures, however, not figures that react: a number in them is a number of the drawing, not
+a parameter a reader could move later. Plots made by statistics programs and inserted as pictures carry even less; their data stays
+behind on the computer of the author.
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[\textwidth][][density-skyline.png]{density-skyline.sfl}
+\caption{Three populations, one field. The density of a mixture of three normal distributions as 1\,296 columns, whose height and
+color are the density. Drag to turn the field; the sliders below it set the spread of the populations and the height of the columns.
+In print a still picture of the scene.}
+\label{fig:field}
+\end{figure*}
+
+Inside the PDF, form fields and document scripts can change what a page shows, but each reader supports a different part of them, and
+a figure has to be rebuilt from parts that were made for forms. Embedded media can carry a model or a movie, but they are opaque: they
+cannot be bound to the data of the paper and cannot be read as text. Computational notebooks ship the whole analysis, which is
+excellent for the work and heavy for a reader who wants the argument and a handful of figures.
+
+The approach here sits between these routes. It ships no more than the figure, keeps the page intact for every reader, draws the figure
+in the fonts of the document, and leaves it readable as text, so that good design of figures in the sense of~\cite{tufte} is not
+traded for interaction.
+
+\section{Figures as sources}
+
+A figure in SFL is a set of named blocks. A \texttt{Shape}, a \texttt{Text} or a \texttt{Path} is placed in its \texttt{layout} and
+dressed in its \texttt{style}; a \texttt{Chart} draws series from data; a \texttt{Scene} holds solids and models in three dimensions.
+Two blocks make a figure more than a picture. A \texttt{DataSource} declares the rows a figure is drawn from, so a plot is bound to a
+table instead of to fixed points. A block of \texttt{Parameters} names the numbers a figure is computed from, with a range and a step
+for each that a reader may move.
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[\textwidth]{sliding-house.sfl}
+\caption{A house on rails, after a house with a sliding shell. Ground floor plan, north elevation on the axes of the plan and a section,
+all from one set of parameters. The sliders below the drawing move the shell, open the doors of the glasshouse, move the car and set
+the hour of the day.}
+\label{fig:house}
+\end{figure*}
+
+The parameters are the heart of a live figure. Every number of the drawing may be an expression of them, and a \texttt{Repeat} draws a
+block once for every row of a table or every cell of a grid, with variables of its own. Listing~\ref{lst:fit} shows the essential
+lines of the fitted curve in Figure~\ref{fig:fit}: three parameters, the curve drawn in 120 short pieces, and a residual for every
+measurement. The curve is the model of first-order elimination
+\begin{equation}
+  c(t) = a\, e^{-k t} + b ,
+  \label{eq:model}
+\end{equation}
+with the amount $a$ above the floor $b$ and the rate $k$. Its half-life follows from the rate alone,
+\begin{equation}
+  t_{1/2} = \frac{\ln 2}{k} ,
+  \label{eq:half}
+\end{equation}
+and is drawn as a mark on the time axis that moves with $k$.
+
+\begin{lstlisting}[caption={The parameters of the fitted curve, the curve in short pieces, and a residual for every row of the table. A slider writes a parameter, and the figure is made again from its source.},label={lst:fit}]
+Parameters fit {
+  a: 78   // 40..120 step 1, Amount above the floor
+  k: 0.24 // 0.05..0.8 step 0.01, Rate of elimination
+  b: 6    // 0..20 step 0.5, Floor
+}
+Repeat curve {
+  count: 120
+  t0: index * tMax / 120
+  c0: a * exp(-k * t0) + b
+  Path piece { points: [[x(t0), y(c0)], [x(t1), y(c1)]] }
+}
+Repeat residuals {
+  each: p in plasma
+  m: a * exp(-k * p.hour) + b
+  Path residual { points: [[x(p.hour), y(p.level)],
+                           [x(p.hour), y(m)]] }
+}
+Component kControl {
+  type: slider
+  value: <-> fit.k
+}
+\end{lstlisting}
+
+A text reads a parameter with a one-way binding, written \texttt{<-}, and a slider writes it with a two-way binding, written
+\texttt{<->}. When a parameter changes, the figure is made again from its source with the new value; nothing else is kept in the figure
+that could fall out of step with it.
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[0.86\textwidth]{city-block.sfl}
+\caption{City block. A district of blocks around a central hall, with a plan of one block, a street in section and a section through
+the hall. The number of blocks across and down, the size of a block, the width of the streets, the depth of the buildings and the
+storeys are parameters, and their sliders sit in the band below the plan.}
+\label{fig:city}
+\end{figure*}
+
+\section{From source to page}
+
+The package draws every figure with the renderer the language has in the browser. Its static part, which turns a source into a vector
+drawing without a browser, is translated from its original language to Lua and runs inside LuaTeX~\cite{luatex}. The drawing is then
+set as PDF operators: paths, shapes, arcs, arrow heads, clips, dashes and transparency, each shape in a form with its own resources, so
+that the resources of the page stay as other packages set them. Texts are not drawn as outlines but set by TeX, in the fonts of the
+document, at the place and size the renderer gave them. A figure therefore looks as it does in the browser and reads like the page
+around it.
+
+A figure is written either in the document, between \texttt{\textbackslash{}begin\{sfl\}} and \texttt{\textbackslash{}end\{sfl\}}, or
+in a file of its own. Listing~\ref{lst:tex} shows the second way for the fitted curve, whose measurements come from a file of JSON, and
+for the hall of robots, whose scene shows a still picture in print and whose model is attached to the PDF.
+
+\begin{lstlisting}[float=t,caption={Two figures of this paper in the document: the fitted curve with its table, and the hall of robots with the still picture of its scene.},label={lst:tex}]
+\usepackage{stickyflow}
+...
+\sflinput[\textwidth][decay-fit.json]{decay-fit.sfl}
+\sflinput[0.8\textwidth][][robot-line.png]{robot-line.sfl}
+\end{lstlisting}
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[0.78\textwidth][][robot-line.png]{robot-line.sfl}
+\caption{Robot line. A production hall in three dimensions, made from one attached model in a repeat. Drag to turn the scene; the
+sliders below it set the robots across, the rows, their distance and the turn of each robot. In print a still picture of the scene.}
+\label{fig:robots}
+\end{figure*}
+
+After the last page the package attaches one file to the PDF. For every figure it holds the page, the rectangle of the picture in
+points, the source, the data, and the names of further files such as models, which are attached as well. A viewer places a figure over
+its picture with the transform of the page: for a page drawn at scale $s$ whose rectangle starts at the left edge $x_0$ and the upper
+edge $y_0$, a point of the PDF lands on the screen at
+\begin{equation}
+  x' = s\,(x - x_0), \qquad y' = s\,(y_0 - y) ,
+  \label{eq:place}
+\end{equation}
+and the figure keeps its place at every zoom. Above every figure the paper sets a short note on an optional layer of the document;
+ordinary readers show it, and the viewer hides it.
+
+Not everything a browser draws can be printed. A scene in three dimensions and a shader that fills a shape are drawn by the graphics
+hardware of a browser, and TeX has none. For these the author gives a still picture, and print shows it in the place of the scene or of
+the whole figure, while the source still travels with the page.
+
+\begin{figure*}[t]
+\vspace{10pt}
+\sflhint
+\centering
+\begin{minipage}[t]{0.3\textwidth}
+\centering
+\sflinput[\linewidth][weather-watch.json][weather-watch.png]{weather-watch.sfl}\\[6pt]
+{\small (a) The weather over a moving sea.}
+\end{minipage}\hspace{0.1\textwidth}%
+\begin{minipage}[t]{0.3\textwidth}
+\centering
+\sflinput[\linewidth][][plasma-watch.png]{plasma-watch.sfl}\\[6pt]
+{\small (b) A battery as a plasma gauge.}
+\end{minipage}
+\caption{Two instruments. Each face is a source with its data and its shader. In the viewer they run: the sea moves, the battery
+charges, its number rolls and its scale fills, and the time is the time of the reader. In print each face is a still picture.}
+\label{fig:watches}
+\end{figure*}
+
+\section{Seven figures}
+
+\subsection{A model fitted by hand}
+
+Figure~\ref{fig:fit} shows the concentration of a drug in the blood after a single dose, measured every hour for twelve hours, with
+the model of Equation~\ref{eq:model} drawn over it~\cite{gibaldi}. The measurements are a table that travels with the figure; the
+curve, the residuals and the half-life are computed from three parameters. In the viewer, three sliders below the plot set the
+amount, the rate and the floor. A reader can bring the curve to the points by hand, watch the residuals shrink, and see at once how
+strongly the half-life of Equation~\ref{eq:half} depends on the rate, which is the point the figure is made for.
+
+\begin{figure*}[t]
+\sflhint
+\centering
+\sflinput[\textwidth][][juno.png]{juno.sfl}
+\caption{A synthesizer in three dimensions. Every fader and switch works and the keys go down; the panels below show the voice, the
+filter, the modulation and the envelope as the controls are moved. In print a still picture of the scene.}
+\label{fig:juno}
+\end{figure*}
+
+\subsection{A field in three dimensions}
+
+Some data has a place, and a density over a plane is seen best as a landscape. Figure~\ref{fig:field} draws the density of a mixture
+of three normal distributions on a grid of 36 by 36 cells as a field of columns, whose height and color are the density, from a pale
+lavender on the floor to an orange peak. In print it is a still picture of the scene. In the viewer the field can be turned and seen
+from every side, and two sliders change the spread of the three populations and the height of the columns. The camera takes in an
+unseen room as high as the highest column can grow, so the view keeps its size while the columns rise and fall.
+
+\subsection{A drawing computed from its parameters}
+
+A technical drawing is a set of measures, and when the measures are named, the drawing follows them. Figure~\ref{fig:house} is a study
+of a house on rails: three buildings in a row and a shell of larch that rides over them, so that the house is closed, half open or all
+glass. Plan, elevation and section come from one block of parameters, and four sliders move the shell along its rails, open the doors
+of the glasshouse, drive the car out of the garage and set the hour, which moves the sun, the shadows and the light in the windows. The
+title block and the area of the floor are computed as well, so the drawing never disagrees with itself.
+
+\subsection{A plan from repeated parts}
+
+Figure~\ref{fig:city} draws a district of blocks around a hall. The blocks are repeats of one block, the streets are the gaps between
+them, and the number of storeys sets the shade of each roof. Beside the plan stand the figures of the district, a plan of one block
+and a street in section, all computed from the same six parameters. It is the heaviest of the flat figures: a change of the number of
+blocks makes several hundred shapes anew.
+
+\subsection{A scene from one model}
+
+Figure~\ref{fig:robots} leaves the plane. A hall of robots is drawn from one model that is repeated in rows, and the model travels as an
+attachment of the document. In the viewer the scene can be turned and zoomed, and the robots across, the rows, their distance and the
+turn of each robot are parameters. In print the figure is a still picture of the same scene.
+
+\subsection{Instruments}
+
+An interface is a figure too. The two watch faces of Figure~\ref{fig:watches} are written in SFL, with data sources for the weather,
+the battery and the time, and with shaders that fill them. In the viewer they run: the sea moves, the battery charges and its number
+rolls, and the time is read from the clock of the reader. Shaders need a browser, so in print each face is its still picture, given
+to the figure as the third optional argument.
+
+\subsection{An object in three dimensions}
+
+The last figure is an instrument of another kind. Figure~\ref{fig:juno} is a synthesizer of the eighties, built from solids, with keys
+that go down, faders and switches that move, and panels below it that explain what each control does to the sound. It is the heaviest
+figure of the paper, more than three thousand lines of source, and still a single figure that travels in the PDF.
+
+Table~\ref{tab:figures} lists the size of the seven figures. The flat figures are drawn in print as they are drawn on screen, with
+every shape; the figures in three dimensions and the instruments with shaders are pictures in print and live only in the viewer.
+
+\begin{table}[t]
+\centering
+\caption{The figures of this paper: lines of source, parameters a reader can move, and shapes drawn in print.}
+\label{tab:figures}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Figure & Lines & Parameters & Shapes \\
+\midrule
+Fitted curve (Fig.~\ref{fig:fit}) & 295 & 3 & 221 \\
+Field of densities (Fig.~\ref{fig:field}) & 159 & 2 & picture \\
+House on rails (Fig.~\ref{fig:house}) & 1\,620 & 4 & 868 \\
+City block (Fig.~\ref{fig:city}) & 1\,491 & 6 & 922 \\
+Robot line (Fig.~\ref{fig:robots}) & 156 & 4 & picture \\
+Watch faces (Fig.~\ref{fig:watches}) & 418 & -- & picture \\
+Synthesizer (Fig.~\ref{fig:juno}) & 3\,386 & 21 & picture \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Writing a live figure}
+
+A live figure is written the way a static one is drawn, only that its numbers get names. An author starts from the picture: the sheet,
+the shapes, the labels. Where a number is a choice rather than a fact, such as the rate of a model or the width of a street, it moves
+into the block of parameters, with a range and a step in a comment beside it, and the drawing refers to it by name. Data that was typed
+into the figure moves into a data source and into a file the document hands to the figure. At every step the figure can be compiled
+and looked at, and at no step does it stop being a picture.
+
+The controls come last. They are drawn into the figure like any other part and bound to a parameter with two arrows, so they share the
+style of the drawing they belong to. In print they are left out, and their labels show the values the figure was printed with.
+
+Because the figure is text, it lives in the same repository as the paper, is compared line by line between versions and is reviewed
+like the prose around it. A reviewer who doubts a fit can open the figure, move the rate and see for themselves, instead of asking the
+authors for another plot.
+
+\section{Limits}
+
+Print and screen agree for every flat figure, with two exceptions: gradients are drawn in their middle color, and shapes filled by a
+shader show the color beneath it. Scenes in three dimensions need a still picture, which the author makes once from the viewer; only
+the first scene of a figure gets it. The viewer is needed to see a figure live. Without it, the reader gets the picture and the note,
+which is no worse than a paper today, but also no better. The source stays inside the file as plain text, so a later program that reads
+the language can bring the figures back without guessing.
+
+\section{Outlook}
+
+Three directions follow. The first is the still picture: the viewer could make it itself while the document is prepared, so that a
+scene needs no work of the author beyond its source. The second is state that can be shared: a reader who found a telling setting of a
+figure should be able to send it as a link that opens the paper with that setting, while the paper stays as its authors wrote it. The
+third is figures that refer to each other, such as a fit whose parameters also move the residual plot on another page; the language
+already binds figures to shared data sources, so this is a question of the viewer rather than of the format.
+
+\section{Conclusion}
+
+A figure that carries its own source can be printed, archived and read like any other figure, and it can still answer when a reader
+asks. Written in the document and drawn by LuaLaTeX, it takes the fonts and the measure of the page; carried in the PDF, it comes alive
+in a viewer that knows its language. Seven figures, from a fitted curve to a synthesizer, show that one small language covers the
+range of figures a scientific paper needs.
+
+\begin{thebibliography}{9}
+\small
+\setlength{\itemsep}{1pt}
+\bibitem{iso} ISO 32000-2:2020. \emph{Document management -- Portable document format -- Part 2: PDF 2.0}. International Organization
+for Standardization, 2020.
+\bibitem{victor} B.~Victor. \emph{Explorable Explanations}. worrydream.com, 2011.
+\bibitem{tufte} E.~R.~Tufte. \emph{The Visual Display of Quantitative Information}. Graphics Press, 1983.
+\bibitem{luatex} The LuaTeX development team. \emph{LuaTeX Reference Manual}. 2023.
+\bibitem{gibaldi} M.~Gibaldi and D.~Perrier. \emph{Pharmacokinetics}. 2nd edition, Marcel Dekker, 1982.
+\bibitem{sfl} Stickyflow. \emph{SFL Specification}. stickyflow.org, 2026.
+\end{thebibliography}
+
+\end{document}

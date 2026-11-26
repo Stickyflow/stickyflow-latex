@@ -56,6 +56,22 @@ The models the scene names are attached to the PDF. Upload them into the project
 last part of the path, so `/models/robot.glb` is also found as `robot.glb`. In the extension the scene can be turned and zoomed, and sliders
 drawn next to it in the same model stay still below it. `examples/robot-line.tex` is a complete document.
 
+### Figures with shaders
+
+A shader, such as a moving sea or a glowing gauge, is drawn by a browser as well, and print shows the color beneath it. When the look of a
+figure depends on its shaders, give it a picture as the third optional argument. A figure without a 3D scene is then that picture in print,
+while its source still travels with the page:
+
+```latex
+\sflinput[0.3\linewidth][battery.json][battery.png]{battery.sfl}
+```
+
+## Sample paper
+
+`examples/paper/paper.tex` is a paper in two columns with seven interactive figures: a model fitted by hand, a field of densities and a
+hall of robots in 3D, a house and a district drawn from their parameters, two instruments with shaders and a synthesizer. Its figures are
+kept in the SFL gallery, and `npm run paper` puts them beside the paper; the release zip holds them and the compiled PDF.
+
 ## How it works
 
 The static core of stickyflow.js, which renders SFL to SVG without a browser, is translated to Lua with TypeScriptToLua. Before that,
@@ -92,8 +108,9 @@ npm run build
 npm run pack
 ```
 
-`npm run pack` compiles the documentation in `doc/` with LuaLaTeX and writes `release/stickyflow.zip`: the two files, the documentation as
-PDF, the examples, this README, the changelog and the license. The same zip goes to a GitHub release and to CTAN.
+`npm run pack` compiles the documentation in `doc/` and the sample paper with LuaLaTeX and writes `release/stickyflow.zip`: the two files,
+the documentation as PDF, the examples with the paper, its figures and its PDF, this README, the changelog and the license. The same zip
+goes to a GitHub release and to CTAN. The paper needs the SFL gallery beside this project, or its folder in `SFL_GALLERY`.
 
 ## Not yet
 

@@ -1,6 +1,6 @@
 {
   "name": "stickyflow-latex",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "SFL figures in LaTeX: the stickyflow renderer translated to Lua, drawn by LuaLaTeX, with the source carried in the PDF for live figures.",
   "license": "Apache-2.0",
@@ -11,7 +11,8 @@
   "type": "module",
   "scripts": {
     "build": "node tools/build.mjs",
-    "pack": "node tools/pack.mjs"
+    "pack": "node tools/pack.mjs",
+    "paper": "node tools/paper.mjs"
   },
   "devDependencies": {
     "typescript": "6.0.2",

@@ -1,0 +1,18 @@
+# The figures of the paper: the name the paper uses, and the file in the SFL gallery it is taken from.
+# npm run paper copies them next to paper.tex; the gallery is ../SFL-Gallery, or the folder in SFL_GALLERY.
+decay-fit.sfl science2d/decay-fit.sfl
+decay-fit.json science2d/decay-fit.json
+density-skyline.sfl science3d/density-skyline.sfl
+density-skyline.png science3d/density-skyline.png
+sliding-house.sfl planner/sliding-house.sfl
+city-block.sfl planner/city-block.sfl
+robot-line.sfl space3d/robot-line.sfl
+robot-line.png space3d/robot-line.png
+robot.glb space3d/robot.glb
+weather-watch.sfl interfaces/dark/weather-watch.sfl
+weather-watch.png interfaces/dark/weather-watch.png
+weather-watch.json interfaces/dark/weather-watch.json
+plasma-watch.sfl interfaces/dark/plasma-watch.sfl
+plasma-watch.png interfaces/dark/plasma-watch.png
+juno.sfl space3d/synth-juno-106.sfl
+juno.png space3d/synth-juno-106.png

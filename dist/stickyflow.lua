@@ -1,4 +1,4 @@
--- stickyflow 0.1.1 for LuaLaTeX, licensed under the Apache License 2.0.
+-- stickyflow 0.2.0 for LuaLaTeX, licensed under the Apache License 2.0.
 -- Built from the sources of stickyflow.js 0.23.1; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
 package.preload['stickyflow-core'] = function(...)
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
@@ -47359,6 +47359,7 @@ function ____exports.createBindingRuntime(self, sfl, options)
         {
             diagnostics = state.diagnostics,
             registerSource = function(____, name, source) return registerSource(nil, state, name, source) end,
+            sourceOf = function(____, name) return state.sources:get(name) end,
             check = function(____, sfl) return checkDocument(nil, state, sfl) end,
             replace = function(____, sfl) return replaceDocument(nil, state, sfl) end,
             setElementState = function(____, id, patch) return setElementState(nil, state, id, patch) end,
@@ -47876,6 +47877,12 @@ function stickyflow.draw(svg, width, mark, picture)
   local vx, vy, vw, vh = vb[1], vb[2], vb[3], vb[4]
   local scale = (width or vw) / vw
   local height = vh * scale
+  -- A figure without a 3D scene that is given a picture is that picture in print, for what only a browser draws, as a shader.
+  if picture and not svg:find('data%-sf%-mesh%-stage') then
+    local w = f(vw * scale)
+    local box = string.format('\\hbox to %sbp{\\vbox to %sbp{\\vss\\hbox{%s\\includegraphics[width=%sbp,height=%sbp]{%s}}}}', w, f(height), mark or '', w, f(height), picture)
+    return box, vw * scale, height
+  end
   local gradients, clips, markers = {}, {}, {}
   local out = {}
 

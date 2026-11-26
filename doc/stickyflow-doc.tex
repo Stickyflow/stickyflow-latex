@@ -6,7 +6,7 @@
 
 \title{The stickyflow package}
 \author{Stickyflow}
-\date{Version 0.1.1, 26 November 2026}
+\date{Version 0.2.0, 26 November 2026}
 
 % Listings show the environment with \textbackslash{}begin, so the package does not take them for a figure.
 \newenvironment{code}{\par\smallskip\begin{alltt}\small}{\end{alltt}\smallskip}
@@ -141,6 +141,23 @@ third optional argument, or put a picture with the name of the SFL file next to 
 
 The models a scene names are attached to the PDF. The package finds a model by its path, or by the last part of the path, so
 \texttt{/models/robot.glb} is also found as \texttt{robot.glb} next to the document.
+
+\section{Figures with shaders}
+
+A shader that fills a shape, such as a moving sea or a glowing gauge, is drawn by the graphics hardware of a browser as well, and TeX has
+none. Print shows the color beneath the shader. When the look of a figure depends on its shaders, give it a picture as the third optional
+argument, as for a scene. A figure without a scene in three dimensions is then that picture in print, at the size of the figure, while its
+source still travels with the page and a viewer draws it live:
+
+\begin{code}
+\textbackslash{}sflinput[0.3\textbackslash{}linewidth][battery.json][battery.png]\{battery.sfl\}
+\end{code}
+
+\section{A sample paper}
+
+The folder \texttt{examples/paper} holds a sample paper in two columns, with listings, equations and a table, whose seven figures show
+what the package draws: a model fitted by hand to measurements, a field of densities and a hall of robots in three dimensions, a house and
+a district drawn from their parameters, two instruments with shaders and a synthesizer. It compiles as it is, and its PDF lies beside it.
 
 \section{Live figures}
 
