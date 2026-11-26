@@ -7,6 +7,7 @@ density-skyline.sfl science3d/density-skyline.sfl
 sliding-house.sfl planner/sliding-house.sfl
 weather-watch.sfl interfaces/dark/weather-watch.sfl
 weather-watch.png interfaces/dark/weather-watch.png
+weather-watch.json interfaces/dark/weather-watch.json
 plasma-watch.sfl interfaces/dark/plasma-watch.sfl
 plasma-watch.png interfaces/dark/plasma-watch.png
 halftone-watch.sfl interfaces/dark/halftone-watch.sfl
