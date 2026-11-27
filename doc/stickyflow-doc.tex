@@ -6,7 +6,7 @@
 
 \title{The stickyflow package}
 \author{Stickyflow}
-\date{Version 0.2.0, 26 November 2026}
+\date{Version 0.2.1, 27 November 2026}
 
 % Listings show the environment with \textbackslash{}begin, so the package does not take them for a figure.
 \newenvironment{code}{\par\smallskip\begin{alltt}\small}{\end{alltt}\smallskip}
@@ -164,6 +164,18 @@ a district drawn from their parameters, two instruments with shaders and a synth
 After the last page the package attaches a file \texttt{stickyflow.json} to the PDF. It holds the SFL, the data and the place on the page of
 every figure. A viewer that reads it can draw the figures again and let them react: sliders move, and what is bound to them follows.
 Controls such as sliders are left out of print.
+
+A reader without such a viewer sees the printed figure. \texttt{\textbackslash{}sflhint} sets a note above it on a layer of the PDF that
+every reader shows and a viewer that draws the figures live hides. Without the optional argument the note reads ``Interactive figure:
+open this PDF with the stickyflow extension.'' The argument can be any text with its own look, but not a link:
+
+\begin{code}
+\textbackslash{}sflhint
+\textbackslash{}sflhint[\textbackslash{}itshape\textbackslash{}footnotesize Interactive figure: open this PDF in a stickyflow viewer]
+\end{code}
+
+The layer needs no other package. Together with a package that makes layers of its own, the PDF has two lists of layers, and readers
+take only one of them.
 
 \section{Limits}
 

@@ -9,7 +9,6 @@
 \usepackage{booktabs}
 \usepackage{listings}
 \usepackage{fancyhdr}
-\usepackage{ocgx2}
 \usepackage[font=small,labelfont=bf,labelsep=period]{caption}
 \usepackage[hidelinks]{hyperref}
 \usepackage{stickyflow}
@@ -17,11 +16,11 @@
 \definecolor{hint}{rgb}{0.15,0.36,0.86}
 \definecolor{code}{rgb}{0.97,0.97,0.98}
 
-% The note above every figure lies on the layer stickyflow-hint. Every reader shows it; the stickyflow extension hides it, because there
+% The note above every figure lies on the layer of the package. Every reader shows it; the stickyflow extension hides it, because there
 % the figure speaks for itself.
-\newcommand\sflhint{%
-  \par\vspace{4pt}\hfill\begin{ocg}{stickyflow-hint}{sflhint}{1}\textcolor{hint}{\itshape\footnotesize Interactive figure: open this PDF with the
-  stickyflow extension}\end{ocg}\par\smallskip}
+\newcommand\figurehint{%
+  \par\vspace{4pt}\hfill\sflhint[\textcolor{hint}{\itshape\footnotesize Interactive figure: open this PDF with the stickyflow
+  extension}]\par\smallskip}
 
 \lstset{basicstyle=\ttfamily\scriptsize, columns=fullflexible, keepspaces=true, frame=tb, framerule=0.4pt, backgroundcolor=\color{code},
   xleftmargin=2pt, xrightmargin=2pt, aboveskip=8pt, belowskip=4pt, captionpos=b, upquote=true}
@@ -90,7 +89,7 @@ state of that work. A reader who wonders how good the fit really is, or what a p
 data, rebuild the figure and hope that it matches what the authors drew.
 
 \begin{figure*}[t]
-\sflhint
+\figurehint
 \centering
 \sflinput[0.82\textwidth][decay-fit.json]{decay-fit.sfl}
 \caption{A model fitted by hand. Concentration of a drug after a single dose, measured every hour, with the model $c(t) = a\,e^{-kt} +
@@ -121,7 +120,7 @@ a parameter a reader could move later. Plots made by statistics programs and ins
 behind on the computer of the author.
 
 \begin{figure*}[t]
-\sflhint
+\figurehint
 \centering
 \sflinput[\textwidth][][density-skyline.png]{density-skyline.sfl}
 \caption{Three populations, one field. The density of a mixture of three normal distributions as 1\,296 columns, whose height and
@@ -148,7 +147,7 @@ table instead of to fixed points. A block of \texttt{Parameters} names the numbe
 for each that a reader may move.
 
 \begin{figure*}[t]
-\sflhint
+\figurehint
 \centering
 \sflinput[\textwidth]{sliding-house.sfl}
 \caption{A house on rails, after a house with a sliding shell. Ground floor plan, north elevation on the axes of the plan and a section,
@@ -201,7 +200,7 @@ A text reads a parameter with a one-way binding, written \texttt{<-}, and a slid
 that could fall out of step with it.
 
 \begin{figure*}[t]
-\sflhint
+\figurehint
 \centering
 \sflinput[0.86\textwidth]{city-block.sfl}
 \caption{City block. A district of blocks around a central hall, with a plan of one block, a street in section and a section through
@@ -231,7 +230,7 @@ for the hall of robots, whose scene shows a still picture in print and whose mod
 \end{lstlisting}
 
 \begin{figure*}[t]
-\sflhint
+\figurehint
 \centering
 \sflinput[0.78\textwidth][][robot-line.png]{robot-line.sfl}
 \caption{Robot line. A production hall in three dimensions, made from one attached model in a repeat. Drag to turn the scene; the
@@ -256,7 +255,7 @@ the whole figure, while the source still travels with the page.
 
 \begin{figure*}[t]
 \vspace{10pt}
-\sflhint
+\figurehint
 \centering
 \begin{minipage}[t]{0.3\textwidth}
 \centering
@@ -284,7 +283,7 @@ amount, the rate and the floor. A reader can bring the curve to the points by ha
 strongly the half-life of Equation~\ref{eq:half} depends on the rate, which is the point the figure is made for.
 
 \begin{figure*}[t]
-\sflhint
+\figurehint
 \centering
 \sflinput[\textwidth][][juno.png]{juno.sfl}
 \caption{A synthesizer in three dimensions. Every fader and switch works and the keys go down; the panels below show the voice, the

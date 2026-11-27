@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.1, 27 November 2026
+
+Built from stickyflow.js 0.23.2.
+
+- `\sflhint[text]` sets a note that a figure is interactive on a layer of the PDF. Every reader shows it, and a viewer that draws the
+  figures live hides it. The layer needs no other package.
+- The sample paper sets its notes with `\sflhint`. With ocgx2 and hyperref together, LuaLaTeX gave the layer of its notes the number of
+  another object, so no viewer could hide them.
+
 ## 0.2.0, 26 November 2026
 
 - A figure without a scene in three dimensions that is given a picture is that picture in print, for what only a browser draws, as

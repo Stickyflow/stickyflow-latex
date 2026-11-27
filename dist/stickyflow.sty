@@ -1,7 +1,7 @@
 \NeedsTeXFormat{LaTeX2e}
 % stickyflow: SFL figures drawn by LuaLaTeX. Licensed under the Apache License 2.0.
 % https://github.com/Stickyflow/stickyflow-latex
-\ProvidesPackage{stickyflow}[2026/11/26 v0.2.0 SFL figures drawn by LuaLaTeX]
+\ProvidesPackage{stickyflow}[2026/11/27 v0.2.1 SFL figures drawn by LuaLaTeX]
 \RequirePackage{iftex}
 \RequireLuaTeX
 \RequirePackage{xcolor}
@@ -22,6 +22,15 @@
 % another command.
 \NewDocumentCommand\stickyflowblock{mmmm}{%
   \leavevmode\directlua{stickyflow.block(#1, \number\dimexpr#2\relax / 65536 * 72 / 72.27, '\luaescapestring{#3}', '\luaescapestring{#4}')}%
+}
+% \sflhint[text]: a note that the figure is interactive, on a layer of the PDF that every reader shows and a viewer that draws the
+% figures live hides. The note is a form with the layer in its own resources, so the resources of the page stay as other packages
+% set them. It cannot hold a link.
+\NewDocumentCommand\sflhint{O{Interactive figure: open this PDF with the stickyflow extension.}}{%
+  \leavevmode\directlua{stickyflow.hintLayer()}%
+  \setbox\stickyflowbox\hbox{\pdfextension literal page{/OC /SflHint BDC}#1\pdfextension literal page{EMC}}%
+  \saveboxresource resources{/Properties << /SflHint \directlua{tex.sprint(stickyflow.hint)} 0 R >>}\stickyflowbox
+  \useboxresource\lastsavedboxresourceindex
 }
 \NewDocumentEnvironment{sfl}{}{%
   \PackageError{stickyflow}{The sfl environment cannot stand inside the argument of a command}{Move it out, or keep the SFL in a file and use \string\sflinput.}%
