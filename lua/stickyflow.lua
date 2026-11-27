@@ -815,6 +815,14 @@ function stickyflow.embed()
   tex.sprint(string.format('\\pdfextension names{/EmbeddedFiles %d 0 R}', names))
 end
 
+-- The layer of the notes that say a figure is interactive, made once. Every reader shows it, and a viewer that draws the figures live
+-- hides it. Its number is given straight to the forms of the notes, as a number read back from TeX can be the one of another object.
+function stickyflow.hintLayer()
+  if stickyflow.hint then return end
+  stickyflow.hint = pdf.immediateobj('<< /Type /OCG /Name (stickyflow-hint) >>')
+  tex.sprint(string.format('\\pdfextension catalog{/OCProperties << /OCGs [%d 0 R] /D << /Order [%d 0 R] >> >>}', stickyflow.hint, stickyflow.hint))
+end
+
 -- The files a scene names, such as its 3D models, each attached once to the PDF under the last part of its name.
 local function attach(source)
   local assets = {}

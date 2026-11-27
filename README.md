@@ -41,6 +41,18 @@ A figure can also stay in a file of its own, with its data in another:
 Controls such as sliders are left out of print; they show in the extension, under the pointer. `examples/section-study.tex` is a complete
 document with both ways.
 
+### A note for other readers
+
+`\sflhint` sets a note above a figure on a layer of the PDF. Every reader shows it, and a viewer that draws the figures live hides it.
+Without the optional argument it reads "Interactive figure: open this PDF with the stickyflow extension." The argument can be any text with
+its own look, but not a link. The layer needs no other package; together with one that makes layers of its own, the PDF has two lists of
+layers.
+
+```latex
+\sflhint
+\sflhint[\itshape\footnotesize Interactive figure: open this PDF in a stickyflow viewer]
+```
+
 ### 3D scenes
 
 Only a browser draws a 3D scene, so in print it is a still picture, set into the place of the scene. Give the picture as the third optional

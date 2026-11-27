@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
+import { zipFolder } from './zip.mjs'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -44,5 +45,5 @@ cpSync(join(ROOT, 'examples'), join(PACKAGE, 'examples'), {
 compile(join(PACKAGE, 'doc'), 'stickyflow-doc.tex', (name) => ['stickyflow-doc.tex', 'stickyflow-doc.pdf'].includes(name))
 compile(join(PACKAGE, 'examples/paper'), 'paper.tex', (name) => !/\.(aux|log|out)$/.test(name) && !FILES.includes(name))
 
-execFileSync('tar', ['-a', '-c', '-f', 'stickyflow.zip', 'stickyflow'], { cwd: RELEASE, stdio: 'inherit' })
+zipFolder(PACKAGE, join(RELEASE, 'stickyflow.zip'), 'stickyflow')
 console.log('release/stickyflow.zip')

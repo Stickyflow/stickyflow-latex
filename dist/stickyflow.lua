@@ -1,5 +1,5 @@
--- stickyflow 0.2.0 for LuaLaTeX, licensed under the Apache License 2.0.
--- Built from the sources of stickyflow.js 0.23.1; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
+-- stickyflow 0.2.1 for LuaLaTeX, licensed under the Apache License 2.0.
+-- Built from the sources of stickyflow.js 0.23.2; do not edit, see https://github.com/Stickyflow/stickyflow-latex.
 package.preload['stickyflow-core'] = function(...)
 --[[ Generated with https://github.com/TypeScriptToLua/TypeScriptToLua ]]
 
@@ -48271,6 +48271,14 @@ function stickyflow.embed()
   for _, entry in ipairs(entries) do list[#list + 1] = string.format('%s %d 0 R', pdfString(entry.name), entry.spec) end
   local names = pdf.immediateobj('<< /Names [' .. table.concat(list, ' ') .. '] >>')
   tex.sprint(string.format('\\pdfextension names{/EmbeddedFiles %d 0 R}', names))
+end
+
+-- The layer of the notes that say a figure is interactive, made once. Every reader shows it, and a viewer that draws the figures live
+-- hides it. Its number is given straight to the forms of the notes, as a number read back from TeX can be the one of another object.
+function stickyflow.hintLayer()
+  if stickyflow.hint then return end
+  stickyflow.hint = pdf.immediateobj('<< /Type /OCG /Name (stickyflow-hint) >>')
+  tex.sprint(string.format('\\pdfextension catalog{/OCProperties << /OCGs [%d 0 R] /D << /Order [%d 0 R] >> >>}', stickyflow.hint, stickyflow.hint))
 end
 
 -- The files a scene names, such as its 3D models, each attached once to the PDF under the last part of its name.
