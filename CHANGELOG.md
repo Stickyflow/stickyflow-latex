@@ -6,6 +6,7 @@ Built from stickyflow.js 0.23.2.
 
 - `\sflhint[text]` sets a note that a figure is interactive on a layer of the PDF. Every reader shows it, and a viewer that draws the
   figures live hides it. The layer needs no other package.
+- The zip of the release is a zip. The ones of 0.1.0 and 0.2.0 were tar archives under the name of a zip, which some systems do not open.
 - The sample paper sets its notes with `\sflhint`. With ocgx2 and hyperref together, LuaLaTeX gave the layer of its notes the number of
   another object, so no viewer could hide them.
 
