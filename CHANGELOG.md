@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The zip of the release holds an entry for each folder, as zip and bsdtar write it. Without them `file`, which CTAN runs on every
+  upload, took the zip of 0.2.1 for a Microsoft Office document.
+
 ## 0.2.1, 27 November 2026
 
 Built from stickyflow.js 0.23.2.
